@@ -1,0 +1,151 @@
+<head>
+<style>
+    body        { background: #fff; margin-left:  40px;   font-size:  0.9em;  font-family: sans-serif; max-width: 800px; }
+    h1          { background: #ffb; margin-left: -30px;   border-top:    5px  solid #ccc; }
+    h2          { background: #ffb; margin-left: -20px;   border-top:    3px  solid #ddd; }
+    h3          { background: #ffb; margin-left: -10px; }
+    h4          { background: #ffb; }
+    code        { font-size:    1.1em;  background:  #ddf; }
+    pre         { margin-left:  2em;    background:  #ddf; }
+    pre code    { font-size:    1.1em;  background:  #ddf; }
+</style>
+
+</head>
+
+<p style="text-align:center">
+    <a href="master-toc.html">master TOC</a>
+|
+    <a href="master-toc.html#doc/git-dig">chapter TOC</a>
+|
+    <a href="support.html">support</a>
+</p>
+
+
+<h1>dig for files in a git repo</h1>
+
+<ul>
+<li><a href="#doc_git_dig_what_can_you_do_">what can you do</a></li>
+<li><a href="#doc_git_dig_usage_">usage</a></li>
+<li><a href="#doc_git_dig_examples_">examples</a>
+<ul>
+<li><a href="#doc_git_dig_simple_usages_">simple usages</a></li>
+<li><a href="#doc_git_dig_looking_for_wasted_space_">looking for wasted space</a></li>
+</ul></li>
+<li><a href="#doc_git_dig_warnings_">warnings</a>
+<ul>
+<li><a href="#doc_git_dig_branch_and_tag_of_the_same_name_">branch and tag of the same name</a></li>
+</ul></li>
+</ul>
+
+<p><a name="doc_git_dig_what_can_you_do_"></a></p>
+
+<h2>what can you do</h2>
+
+<p>You can look for "large" files hiding in your repo, and/or you can look for
+files based on a partial match of the filename.</p>
+
+<p>You can look for them in your local branches, tags, remote branches, the
+stash, the reflog.</p>
+
+<p>Or all of them.  Or any combination of them.</p>
+
+<p><a name="doc_git_dig_usage_"></a></p>
+
+<h2>usage</h2>
+
+<p>Run with <code>-h</code> to see a list of options; they should be fairly clear, but
+basically:</p>
+
+<ul>
+<li><p>You first specify what to search (minimum size of file, or possibly
+restrict to filenames containing some string).</p></li>
+<li><p>You then specify where to search.  git-dig has specific options to check
+the stash or the reflog, but the rest of them are passed to <code>git
+rev-parse --symbolic</code>.  (These options need to be separated from git-dig's
+options with a <code>--</code>, and, if not supplied, they default to <code>--branches
+--remotes --tags</code>).</p></li>
+</ul>
+
+<p>And that's basically it.</p>
+
+<p>Note: when the <code>path_match</code> (--pm) is specified, the default for --top (max
+number of files to show) changes to 999999 and that for --min (minimum size of
+file) changes to 1.  The idea is that <code>path_match</code> is often used to look for
+files, so we don't want to constrain that type of search unless asked to.</p>
+
+<p><a name="doc_git_dig_examples_"></a></p>
+
+<h2>examples</h2>
+
+<p><a name="doc_git_dig_simple_usages_"></a></p>
+
+<h3>simple usages</h3>
+
+<ul>
+<li><p>Show top 10 files larger than 10k from local branches, remote branches,
+and tags (the stash and the reflog are not checked here)</p>
+
+<pre><code>git dig
+# defaults to 'git dig -- --branches --remotes --tags'
+# for option defaults run with '-h'
+</code></pre></li>
+<li><p>Show top 5 largest files from local branches.</p>
+
+<pre><code>git dig --top 5 -- --branches
+</code></pre></li>
+<li><p>Show top 10 largest files whose pathnames contain 'foo' from local and
+remote branches (but not tags)</p>
+
+<pre><code>git dig -pm foo -- --branches --remotes
+</code></pre></li>
+<li><p>Show top 10 largest files whose pathnames contain 'bar' from local branches
+'pu' and 'master' (note, no '--' separator required; however it is a good
+habit to get into just in case).</p>
+
+<pre><code>git dig -pm bar pu master
+</code></pre></li>
+</ul>
+
+<p><a name="doc_git_dig_looking_for_wasted_space_"></a></p>
+
+<h3>looking for wasted space</h3>
+
+<ul>
+<li><p>Find the top 10 largest files after <code>git gc --prune=now</code></p>
+
+<pre><code>git dig --check_stash --check_reflog -- --all
+# you can abbreviate those flags; run with '-h' or see next example
+</code></pre>
+
+<p>This will catch every possible file in the repo (assuming you ran that
+'git gc'), and show you the top 10.  To see the top 50,</p>
+
+<pre><code>git dig --cs --crl --top=50 -- --all
+</code></pre></li>
+<li><p>Find the largest files that are only in the stash or a reflog</p>
+
+<pre><code>git dig --cs --crl -- --not --all
+</code></pre></li>
+<li><p>That last command, because of the '--not --all', would also miss some
+unusual refs, like the 'refs/original' that git-filter-branch ends up
+saving all your old commits to.  To see that and possibly any other such
+non-standard commits</p>
+
+<pre><code>git dig --cs --crl -- --not --branches --remotes --tags
+</code></pre>
+
+<p>As you can see, that's a little longer to type but you can see where this
+is going now.  This is the command to see everything that is not in a
+"normal" branch (local or remote) or tag.</p></li>
+</ul>
+
+<p><a name="doc_git_dig_warnings_"></a></p>
+
+<h2>warnings</h2>
+
+<p><a name="doc_git_dig_branch_and_tag_of_the_same_name_"></a></p>
+
+<h3>branch and tag of the same name</h3>
+
+<p>If you have a repo where there is a branch and a tag of the same name, expect
+things not to work perfectly.</p>

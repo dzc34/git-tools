@@ -1,0 +1,147 @@
+<head>
+<style>
+    body        { background: #fff; margin-left:  40px;   font-size:  0.9em;  font-family: sans-serif; max-width: 800px; }
+    h1          { background: #ffb; margin-left: -30px;   border-top:    5px  solid #ccc; }
+    h2          { background: #ffb; margin-left: -20px;   border-top:    3px  solid #ddd; }
+    h3          { background: #ffb; margin-left: -10px; }
+    h4          { background: #ffb; }
+    code        { font-size:    1.1em;  background:  #ddf; }
+    pre         { margin-left:  2em;    background:  #ddf; }
+    pre code    { font-size:    1.1em;  background:  #ddf; }
+</style>
+
+</head>
+
+<p style="text-align:center">
+    <a href="master-toc.html">master TOC</a>
+|
+    <a href="master-toc.html#index">chapter TOC</a>
+|
+    <a href="support.html">support</a>
+</p>
+
+
+<p><a name="index_a_few_git_based_tools_"></a></p>
+
+<h1>a few git-based tools</h1>
+
+<p>These programs...</p>
+
+<ul>
+<li>are independent of each other</li>
+<li>can be installed simply by copying them somewhere in your $PATH (they do
+require perl 5.10.0 or later though)</li>
+<li>respond to '--help', '-h', etc., for quick help (some programs may have
+additional documentation available as given below).</li>
+</ul>
+
+<p>Briefly:</p>
+
+<ul>
+<li><p>git ls: List files with pathnames matching given regexes in current branch
+or, optionally, all local branches, remote branches, or tags.</p></li>
+<li><p>git dig: Dig through your repo for large files, files with pathnames
+matching a regex, etc.  If git-dig can't find a file, it's in an
+unreachable commit or had been gc-d.</p></li>
+<li><p>git branch-check: Checks what branches you have that your remotes don't
+have and vice-versa, and for the common ones, how many commits are
+different.</p></li>
+</ul>
+
+<hr />
+
+<ul>
+<li><p><code>git-ls</code>: Given a list of regex patterns, git-ls matches these to
+pathnames (not just the basename of the file) and finds all matching files
+in the current branch.  You can add options to search all local branches,
+remote branches, and tags.  Options can be combined, so '-l -r' checks
+local and remote branches but not the tags.</p>
+
+<p>See the inline help for some more info.</p></li>
+<li><p><code>git-dig</code>: Finds files in your git repository.  You can look for large
+files hiding in your repo, and/or you can look for files based on a
+partial match of the filename.  You can look for them in your local
+branches, tags, remote branches, the stash, or the reflog.  Or all of
+them. Or any combination of them.</p>
+
+<p>For instance, <code>git dig --check_stash --check_reflog -- --all</code> will find
+pretty much <em>any</em> file in your repo except from unreachable commits (i.e.,
+not even in the reflog anymore).</p>
+
+<p>Even better, <code>git dig --check_stash --check_reflog -- --not --all</code> will
+find you only those files that are in your stashes or reflog but <em>not</em> in
+any of your branches or tags.</p>
+
+<p>See <a href="http://sitaramc.github.com/git-tools/git-dig.html">here</a> or in the
+file doc/git-dig.mkd for more examples.</p></li>
+<li><p><code>git-branch-check</code>: Checks your working repo's branches and the current
+"updatedness" of each branch vis-a-vis all remote branches of the same
+name, as well as all other local branches.  It'll show you what branches
+you have that the remotes don't, and vice versa.</p>
+
+<p>When matching branches are found, it'll show you if they're out of sync
+('git branch -v -v' will only show you for the 'upstream' but you might
+have other remotes you also push to).</p>
+
+<p>This is meant to be interactive, using colors, green for stuff that is
+extra on the local side, red for the other side.  See the end of this
+document for sample output.</p>
+
+<p>In addition, it can also fast-forward all your local branches if their
+upstreams have moved ahead.</p></li>
+<li><p><code>git-squirrel</code>: Helps you abuse git to "squirrel away" files you might
+never need but are afraid to delete, work-in-progress items that don't
+have their own repos, etc., simply and quickly.</p>
+
+<p>Full documentation
+<a href="http://sitaramc.github.com/git-tools/git-squirrel.html">here</a> or in the
+file doc/git-squirrel.mkd.</p></li>
+</ul>
+
+<p><a name="index_sample_output_"></a></p>
+
+<h2>sample output</h2>
+
+<p><a name="index_git_branch_check_"></a></p>
+
+<h3>git-branch-check</h3>
+
+<p><html></p>
+
+<p><style>
+    pre        { background:  #fff !important; }
+</style></p>
+
+<pre>
+
+gcode:
+    <font color="green">foo, gh-pages, q</font>
+git95:
+    <font color="green">foo, gh-pages</font>
+    <font color="red">bp-v2.0.3, pu-ssh-plus, rrr, temp-br--data-dumper-problem-demo</font>
+github:
+    <font color="green">foo, q</font>
+    <font color="red">bp-v2.0.3, fedora-temp, temp-br--data-dumper-problem-demo</font>
+
+current branch: pu
+checking 6 of 6 local branches
+   <font color="green">2</font>        <font color="green">pu</font>...<font color="red">gcode/pu</font>
+  <font color="green">16</font>        pu...master
+   <font color="green">1</font>   <font color="red">2</font>    pu...q
+   <font color="green">4</font>   <font color="red">7</font>    pu...vrs
+      <font color="red">17</font>    master...q
+      <font color="red">19</font>    master...vrs
+   <font color="green">5</font>   <font color="red">7</font>    q...vrs
+
+</pre>
+
+<p></html></p>
+
+<p>As you can see, I have 3 remotes.  Ignoring the test branches, it tells me I
+don't send the 'gh-pages' branch to gcode or git95.  There are also branches
+on github and git95 that are not on my local repo (the commits may be there
+but no local checkout).</p>
+
+<p>I have 2 commits on 'pu' that I am yet to send to gcode, though the others
+look fine.  The relationship between my local branches is also shown (if
+they're "near" enough).  For example, my 'pu' is 16 commits ahead of 'master'.</p>

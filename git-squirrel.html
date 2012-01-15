@@ -1,0 +1,225 @@
+<head>
+<style>
+    body        { background: #fff; margin-left:  40px;   font-size:  0.9em;  font-family: sans-serif; max-width: 800px; }
+    h1          { background: #ffb; margin-left: -30px;   border-top:    5px  solid #ccc; }
+    h2          { background: #ffb; margin-left: -20px;   border-top:    3px  solid #ddd; }
+    h3          { background: #ffb; margin-left: -10px; }
+    h4          { background: #ffb; }
+    code        { font-size:    1.1em;  background:  #ddf; }
+    pre         { margin-left:  2em;    background:  #ddf; }
+    pre code    { font-size:    1.1em;  background:  #ddf; }
+</style>
+
+</head>
+
+<p style="text-align:center">
+    <a href="master-toc.html">master TOC</a>
+|
+    <a href="master-toc.html#doc/git-squirrel">chapter TOC</a>
+|
+    <a href="support.html">support</a>
+</p>
+
+
+<h1>squirrel away files and notes</h1>
+
+<ul>
+<li><a href="#doc_git_squirrel_why_">why</a>
+<ul>
+<li><a href="#doc_git_squirrel_usage_by_examples_">usage by examples</a></li>
+</ul></li>
+<li><a href="#doc_git_squirrel_cautions_">cautions</a></li>
+<li><a href="#doc_git_squirrel_tips_">tips</a></li>
+</ul>
+
+<p><a name="doc_git_squirrel_why_"></a></p>
+
+<h2>why</h2>
+
+<p>Here are my two most common uses for this:</p>
+
+<ul>
+<li><p>I have plenty of files that I probably don't need again, but don't dare to
+delete <em>right now</em>.  Since cleaning up the hard disk is a chore, I never
+get around to doing it <em>later</em> and they hang around pretty much forever.</p></li>
+<li><p>A lot of artifacts at work are ODT/ODS/ODP, and I don't like using normal
+git workflows with them due to merge issues.  Since the buck stops with me
+on these docs, I simply choose to save them everyday using this mechanism.</p></li>
+</ul>
+
+<p>You can do most of the above with normal directories (except the part about
+versioning LibreOffice files), but I think having the files directly on disk
+is ugly and messy, not to mention too "in your face", for stuff you may never
+need.</p>
+
+<p><font color="gray">A word about email: if <em>all</em> your work items come via
+email, it is certainly feasible to use the mail client itself to do all this.
+My problem is there is so much <em>more</em> junk (junk != spam, please note) on
+email, it slows down everything else.  There are dozens of attachments I don't
+even open, for instance.  With squirrel, I am only dealing with content that I
+at least had a passing interest in, and which has been on my hard disk, <em>other
+than</em> just sitting in my email, at some point.</font></p>
+
+<p>I want to</p>
+
+<ul>
+<li>reduce clutter on my file system</li>
+<li>save arbitrary files in some categorised fashion</li>
+<li>save multiple revisions of the same file at regular intervals</li>
+<li>record accurately when they were saved (Unix timestamps are too fragile)</li>
+<li>allow me to delete them en-masse if needed</li>
+<li>get automatic de-dup for similar content</li>
+<li>get "better-than-unison" syncing between computers</li>
+</ul>
+
+<p><code>git squirrel</code> is a tool to manage your own special "dump everything here" git
+repository.</p>
+
+<p><a name="doc_git_squirrel_usage_by_examples_"></a></p>
+
+<h3>usage by examples</h3>
+
+<p>First, I have two git aliases (in <code>~/.gitconfig</code>) that look like this:</p>
+
+<pre><code>[alias]
+    z   =   squirrel --repo=/home/sitaram/imli/repos/squirrel
+    nb  =   squirrel --repo=/home/sitaram/imli/repos/notebook
+</code></pre>
+
+<p>With these aliases, I never have to type out the actual 'squirrel' repository
+name, as you can see.  The commands below all save to that repo.</p>
+
+<ul>
+<li><p>save an arbitrary file or files</p>
+
+<pre><code>git z -s bills/2011 *-bill-payment-*.pdf
+</code></pre>
+
+<p>This saves the PDFs named to a branch called bills/2011</p></li>
+<li><p>save some files with a "commit message" (see tips section later for how
+this may be useful)</p>
+
+<pre><code>git z -s reviews/2011 "first round of reviews" [...files...]
+</code></pre></li>
+<li><p>regularly save some work-in-progress</p>
+
+<pre><code>git z -s reviews/2011 papers/*.pdf reviews/*.ods
+</code></pre>
+
+<p>You can do this everyday if you like, and only changes get recorded.</p></li>
+<li><p>list all branches, including remote branches which you have not yet
+checked out local copies of</p>
+
+<pre><code>git z -l
+</code></pre>
+
+<p>same but list only branches containing 'foo' anywhere in the name</p>
+
+<pre><code>git z -l foo
+</code></pre></li>
+<li><p>take a look at the entire repo using 'gitk'</p>
+
+<pre><code>git z -v
+</code></pre>
+
+<p>or just some branches</p>
+
+<pre><code>git z -v bills/2009 bills/2010
+</code></pre>
+
+<p>or all branches containing 'foo' anywhere in the name (see tips section
+later for details on matching multiple branch names)</p>
+
+<pre><code>git z -v /foo
+</code></pre>
+
+<p>You can use 'tig' instead of 'gitk' by running with -v=tig instead of -v.</p>
+
+<p>In both these cases, squirrel adds the --date-order option.</p></li>
+<li><p>restore a file or files quickly, using a branch name and one or more
+filepath regexes</p>
+
+<pre><code>git z -r reviews/2011 access
+</code></pre>
+
+<p>This get you all files whose <em>path</em> (i.e., including directory part)
+contains the word "access", from the branch called reviews/2011, to
+<code>/tmp</code>.</p>
+
+<p>See tips section later for other options (like how to save the files to
+the current directory, etc)</p></li>
+</ul>
+
+<p><a name="doc_git_squirrel_cautions_"></a></p>
+
+<h2>cautions</h2>
+
+<ul>
+<li><p>the repo should NOT be bare.  This <em>is</em> a work repo, except you're using
+it via a special program.</p>
+
+<p>For example, I have an equivalent repo on my other machines, and manual
+syncs involve the usual push/pull between one central -- bare -- repo and
+each of the work repos on different machines.</p>
+
+<p>In other words, exactly the same as any other "working repo".</p></li>
+<li><p>for the same reasons, do not run one squirrel command when another one is
+pending.  They both use the same repo/working tree!</p></li>
+<li><p>dont use it for files that are too large; this isn't anything
+significantly different from other git repos.  This is not git-annexe or
+bup :-)</p></li>
+</ul>
+
+<p><a name="doc_git_squirrel_tips_"></a></p>
+
+<h2>tips</h2>
+
+<ul>
+<li><p>the requirement for '--repo' (squirrel repo path) is cumbersome but the
+fact is, most anyone should have at most one or two.  Use git aliases;
+here are mine:</p>
+
+<pre><code>z   =   squirrel --repo=/home/sitaram/imli/squirrel
+nb  =   squirrel --repo=/home/sitaram/imli/notebook
+</code></pre>
+
+<p>and I just say 'git z [...]' for the 'squirrel' repo, and 'git nb [...]'
+for the notebook repo.  You could also use shell aliases.</p></li>
+<li><p>(all commands) you can use a regex pattern to reduce typing the branch
+names.  For example:</p>
+
+<pre><code>git z -s /bills [...files to save...]
+</code></pre>
+
+<p>This will look at all branches that contain 'bills' anywhere, and pick the
+last one (by sort order).  So if you have bills/2010, bills/2011, and
+bills/2012, the 2012 one will be picked up.</p></li>
+<li><p>(list) you can use multiple regex patterns for the branch names, and they
+will all be OR-ed together.  But don't use complex regexes; the OR-ing is
+very simplistic.</p>
+
+<p>Also, this one doesn't use "/" at the beginning to denote a pattern to
+search for; they're all patterns anyway</p></li>
+<li><p>(restore) you can use multiple regex patterns for the dir/file names;
+they're also OR-ed in the same way and the same cautions apply.</p></li>
+<li><p>(restore) you can specify where to put the restored files, by saying
+<code>-r=.</code>, <code>-r=../foo</code>, etc., for paths relative to the current directory, or
+<code>-r=/tmp/myfiles</code> for absolute paths.</p></li>
+<li><p>(restore) you can go to older commits by adding a commit subject/SHA
+pattern:</p>
+
+<pre><code>git z -r=. reviews/2011 -cs=first.round filepatt [...]
+</code></pre>
+
+<p>The pattern, treated as a regex, is searched in the output of 'git log
+--date-order --oneline' after checking out the given branch.</p></li>
+<li><p>(edit) you can use many 'git grep' options, but you need to put them after
+a "--":</p>
+
+<pre><code>squirrel -e -- foo bar       # edit files containing foo *and* bar
+squirrel -e -- foo --or bar  # edit files containing foo *or* bar
+</code></pre>
+
+<p>You'll also notice that git grep's default is --or, but we change it to
+--and.  Be aware that internally, a '-l' and a '-i' are also prefixed.</p></li>
+</ul>
