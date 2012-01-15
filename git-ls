@@ -6,17 +6,17 @@ use warnings;
 # ----------------------------------------------------------------------
 
 use Getopt::Long;
-my ( $help, $branches, $remotes, $tags, $br_incl, $br_excl );
-#<<<
+my ( $help, @heads, $local, $remotes, $tags, $leafs_only );
 GetOptions(
-    "help|h|?"   => \$help,        # this help text
-    "branches|b" => \$branches,    # check local branches also
-    "remotes|r"  => \$remotes,     # check remotes also
-    "tags|t"     => \$tags,        # check tags also
+    "help|h|?"      => \$help,          # this help text
+    "branch|b=s"    => \@heads,         # branch name to operate on
+    "local|l"       => \$local,         # check local branches also
+    "remotes|r"     => \$remotes,       # check remotes also
+    "tags|t"        => \$tags,          # check tags also
+    "leafs_only|lo" => \$leafs_only,    # search only leaf refs; see below
 ) or die "option error; please run with '-h' for help\n";
-#>>>
 
-usage() if $help;    # exits;
+usage() if $help;                       # exits;
 
 # globals
 
@@ -33,18 +33,17 @@ sub try;
 # combine search pattern
 my $patt = join "|", @ARGV;
 
-# HEADs to look at, including current one
-my @heads;
-
 # get current branch
 my $current = 'HEAD';
 try "git symbolic-ref HEAD" and ( $current = (lines)[0] ) =~ s(refs/heads/)();
 
-push @heads, '--branches' if $branches;
+@heads = split( /,/, join( ',', @heads ) );    # see 'man Getopt::Long' :)
+push @heads, '--branches' if $local;
 push @heads, '--remotes'  if $remotes;
 push @heads, '--tags'     if $tags;
 @heads = ($current) unless @heads;
 
+# this also expands things like --branches, using rev-parse
 @heads = leaf_only(@heads);
 
 my %seen;
@@ -74,12 +73,14 @@ sub replace_full_refs {
 
 # kill the internal nodes (there should be a git supplied way to do this, no?)
 sub leaf_only {
+    # also uses $leafs_only
     my @rev_parse_args = @_;
     my ( %nonleaf, %leaf );
 
     my $cmd = "git rev-parse --symbolic " . join( " ", @rev_parse_args );
     chomp( my @refs = `$cmd` );
     @refs = replace_full_refs(@refs);
+    return @refs unless $leafs_only;
 
     # '--simplify-by-decoration' is key -- with that flag, git prints the next
     # decoration line's SHA (which may in reality be many commits ago) as the
@@ -146,7 +147,25 @@ Usage: git ls [options] [list of pathname regexes]
     }
 
     say "
-By default, only the current branch is checked.
+-l, -r, -t, and -b:
+    By default, only the current branch is checked.  The 3 options (-l, -r,
+    and -t) can be combined if needed.  If you don't want to search so many
+    branches, use '-b' to specify which you want.  You can use it multiple times
+    or supply a comma separated list.
+
+--leafs_only:
+    Normally, if you specify '-l', etc., all the corresponding refs are
+    searched and matches reported  If you have too many local branches that
+    all have the file, you'll get a lot of matches.  It becomes even more
+    useless with tags, since there are often far more tags than branches.
+
+    Specifying '-lo' would prevent that by searching only leaf refs (refs
+    which are not part of some other ref).
+
+    Be warned that this could miss some matches, for example if a file was
+    deleted between master and pu, and you search '-l -lo', since pu is a
+    leaf, it will be picked over master, and you won't find the file.  For
+    such cases use '-b master' explicitly or don't use '-lo'.
 ";
 
     exit 1;
