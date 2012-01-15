@@ -1,0 +1,282 @@
+#!/usr/bin/perl
+use 5.10.0;
+use strict;
+use warnings;
+
+use File::Temp qw(tempdir);
+END { chdir( $ENV{HOME} ); }
+my $tempdir = tempdir( "git-dig_tempdir.XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1 );
+
+# ----------------------------------------------------------------------
+
+use Getopt::Long;
+my ( $help, $top, $min, $path_match, $check_stash, $check_reflog );
+GetOptions(
+    "help|h|?"         => \$help,           # this help text
+    "top=i"            => \$top,            # max files to show; default 10
+    "min=i"            => \$min,            # minimum size in bytes; default 10240
+    "path_match|pm=s"  => \$path_match,     # (alias 'pm') regex to match pathnames
+    "check_stash|cs"   => \$check_stash,    # (alias 'cs') check stash also
+    "check_reflog|crl" => \$check_reflog    # (alias 'crl') check reflog also
+) or die "option error; maybe a typo or a missing '--' somewhere?\n";
+
+# if looking for a specific path, the other constraints are removed if not
+# specified explicitly
+if ($path_match) {
+    $top ||= 999999;
+    $min ||= 1;
+}
+
+$top        ||= 10;
+$min        ||= 10240;
+$path_match ||= ".";
+
+usage() if $help;    # exits;
+
+# globals
+
+# ----------------------------------------------------------------------
+
+# forward declarations for some subs; see end of file for code
+sub rc;
+sub text;
+sub lines;
+sub try;
+
+# ----------------------------------------------------------------------
+
+# get shas that are *only* in the reflog now
+my @reflog_shas = ();
+chomp( @reflog_shas = `git log -g --format=%gd` ) if $check_reflog;
+
+# get shas that are *only* in the stash now
+my @stash_shas = ();
+chomp( @stash_shas = `git stash list --format=%gd` ) if $check_stash;
+
+my @rev_parse_args = @ARGV;
+@rev_parse_args = qw(--branches --remotes --tags) unless @rev_parse_args;
+
+# rev-parse the arguments and then get just the leaf nodes
+my @refs = leaf_only(@rev_parse_args);
+
+# now you have your search lists... (mild TODO -- dare we add dangling commits
+# to this?  Would add one more loop to the 3 'git log' loops below but this
+# one would have a very large exclusion list -- all of reflog!)
+
+# ----------------------------------------------------------------------
+
+# first, find blob SHAs and names (no sizes here)
+open( my $objects, "-|", "git", "rev-list", "--objects", @refs, @stash_shas, @reflog_shas ) or die "rev-list: $!";
+open( my $blobfile, ">", "$tempdir/blobs" ) or die "blobs out: $!";
+
+my ( $blob, $name );
+my %name;
+my %size;
+while (<$objects>) {
+    next unless / ./;    # no commits or top level trees
+    ( $blob, $name ) = split;    # TODO test with filenames containing spaces also
+    next unless $name =~ /$path_match/;
+    $name{$blob} = $name;
+    say $blobfile $blob;
+}
+close($blobfile);
+
+# next, use cat-file --batch-check on the blob SHAs to get sizes
+open( my $sizes, "-|", "< $tempdir/blobs git cat-file --batch-check | grep blob" ) or die "cat-file: $!";
+
+my ( $dummy, $size );
+while (<$sizes>) {
+    ( $blob, $dummy, $size ) = split;
+    next if $size < $min;
+    $size{ $name{$blob} } = $size if ( $size{ $name{$blob} } || 0 ) < $size;
+}
+
+my @names_by_size = sort { $size{$b} <=> $size{$a} } keys %size;
+
+my $count = 0;
+say "
+The size shown is the largest that file has ever attained.  But note
+that it may not be that big at the commit shown, which is merely the
+most recent commit affecting that file.
+";
+
+# finally, for each name being printed, find when it was last updated on each
+# branch that we're concerned about and print stuff out
+for my $name (@names_by_size) {
+    say "$size{$name}\t$name";
+
+    # when you stash on top of say 'master', then you want only those files
+    # that are in that stash (and not all that are *reachable* from that
+    # stash, which would include files in 'master') to be tagged 'stash@{0}'
+    # or whatever.  So you deal with the normal refs first, then the other two
+    # lists, each time --not-ing the refs already done.
+
+    # IOW, doing it this way lets 'git dig -cs -- --not --all' shows you
+    # *only* those files that are in the stash (or reflog if you used -crl)
+
+    for my $r (@refs) {
+        system("git --no-pager log -1 --format='%x09%h%x09%x09%ar%x09$r' $r -- $name");
+    }
+    for my $r (@stash_shas) {
+        system("git --no-pager log -1 --format='%x09%h%x09%x09%ar%x09$r' $r --not --branches --remotes --tags -- $name");
+    }
+    for my $r (@reflog_shas) {
+        system( "git --no-pager log -1 --format='%x09%h%x09%x09%ar%x09$r' $r --not --branches --remotes --tags " . join( " ", @stash_shas ) . " -- $name" );
+    }
+    print "\n";
+
+    $count++; last if $count >= $top;
+}
+print "\n";
+
+exit;
+
+# ----------------------------------------------------------------------
+
+# this is nothing but detecting a situation that I can't fix, and working it
+# out as best I can.  The cause is that 'rev-parse' returns full refs when
+# '--all' is passed, but nothing on earth seems to make
+# 'simplify-by-decoration' produce full refs.  So they don't match, and all
+# the 'leaf_only' logic goes to pot.
+
+# since I can't (reliably) add refs/??? to the refnames put out by 'git log',
+# I have to go the other way -- remove them from the 'rev-parse' output and
+# add in the non-standard ones manually.  If this were only about the stash
+# that wouldn't matter -- you can get it by using --cs anyway -- but it's
+# things like refs/original that people are really looking for when they use
+# this program.
+
+# all that apart, this does cause a problem for repos where both
+# refs/heads/foo and refs/tags/foo exist.  I probably will ignore it (other
+# than documenting it).
+
+sub replace_full_refs {
+    my @refs;
+    local @_ = @_;    # defeat the implicit aliasing in the 'for' loop below
+
+    for my $r (@_) {
+        $r =~ s(^refs/(heads|tags|remotes)/)();    # was a proper ref
+        push @refs, $r;
+    }
+
+    return @refs;
+}
+
+# kill the internal nodes (there should be a git supplied way to do this, no?)
+sub leaf_only {
+    my @rev_parse_args = @_;
+    my ( %nonleaf, %leaf );
+
+    my $cmd = "git rev-parse --symbolic " . join( " ", @rev_parse_args );
+    chomp( my @refs = `$cmd` );
+    @refs = replace_full_refs(@refs);
+
+    # '--simplify-by-decoration' is key -- with that flag, git prints the next
+    # decoration line's SHA (which may in reality be many commits ago) as the
+    # parent instead of the real parent commit.
+
+    $cmd = "git log --format=%h:%p:%d --simplify-by-decoration " . join( " ", @rev_parse_args );
+    for (`$cmd`) {
+        chomp;
+        my ( $h, $p, $d ) = split /:/;
+
+        # mark parents as non-leaf
+        for my $p1 ( split ' ', $p ) {
+            $nonleaf{$p1}++;
+        }
+
+        # if we're non-leaf, we're done; bail out
+        next if $nonleaf{$h};
+
+        # find our decorations
+        if ($d) {
+            $d =~ s/ \(//;
+            $d =~ s/\)//;
+            my @d = split /, /, $d;
+
+            # check our list of refs in order
+            for my $r (@refs) {
+                if ( $r ~~ @d ) {
+                    $leaf{$r} = 1;    # and mark the first
+                    last;             # don't mark any of the others
+                }
+            }
+        }
+    }
+
+    # return leaf refs, preserving the original order of @refs
+    return grep { $leaf{$_} } @refs;
+}
+
+# DONE...
+
+# ----------------------------------------------------------------------
+# subroutines
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+
+sub usage {
+    # I don't like POD.  This is not up for discussion.
+
+    say "
+git-dig -- dig for files in a git repo
+
+Usage: git dig [options] -- [refs]
+    (NOTE: the '--' is needed to separate git-dig options from the refs if the
+    refs also start with '--'; see documentation for examples)
+";
+
+    @ARGV = ($0);
+    while (<>) {
+        next unless /^\s*GetOptions/ .. /^\s*\)/;
+        next if /^\s*GetOptions/ or /^\s*\)/;
+
+        my $op = '';
+        if (/"(.*?)"/) {
+            $op = "  " . join( ", ", map { s/[=:][sif]$//; /../ ? "--$_" : "-$_" } split /\|/, $1 );
+            print $op;
+        }
+        print( " " x ( 30 - length($op) ) );
+
+        s/.*#/#/;
+        print;
+    }
+
+    say "
+Note: when path_match (--pm) is specified, the default for --top changes to
+999999 and that for --min changes to 1.  The idea is that path_match is often
+used to look for files, so we don't want to constrain that type of search
+unless asked for.
+";
+
+    exit 1;
+}
+
+# ----------------------------------------------------------------------
+
+# bare-minimum subset of 'Tsh' (see github.com/sitaramc/tsh)
+{
+    my ( $rc, $text );
+    sub rc   { return $rc   || 0; }
+    sub text { return $text || ''; }
+    sub lines { return split /\n/, $text; }
+
+    sub try {
+        my $cmd = shift; die "try: expects only one argument" if @_;
+        $text = `( $cmd ) 2>&1; echo -n RC=\$?`;
+        if ( $text =~ s/RC=(\d+)$// ) {
+            $rc = $1;
+            return ( not $rc );
+        }
+        die "couldnt find RC= in result; this should not happen:\n$text\n\n...\n";
+    }
+}
+
+sub dbg {
+    use Data::Dumper;
+    for my $i (@_) {
+        print STDERR "DBG: " . Dumper($i);
+    }
+}
+

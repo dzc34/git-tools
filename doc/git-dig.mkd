@@ -1,0 +1,94 @@
+# F=git-dig dig for files in a git repo
+
+[[TOC]]
+
+## what can you do
+
+You can look for "large" files hiding in your repo, and/or you can look for
+files based on a partial match of the filename.
+
+You can look for them in your local branches, tags, remote branches, the
+stash, the reflog.
+
+Or all of them.  Or any combination of them.
+
+## usage
+
+Run with `-h` to see a list of options; they should be fairly clear, but
+basically:
+
+  * You first specify what to search (minimum size of file, or possibly
+    restrict to filenames containing some string).
+
+  * You then specify where to search.  git-dig has specific options to check
+    the stash or the reflog, but the rest of them are passed to `git
+    rev-parse --symbolic`.  (These options need to be separated from git-dig's
+    options with a `--`, and, if not supplied, they default to `--branches
+    --remotes --tags`).
+
+And that's basically it.
+
+Note: when the `path_match` (--pm) is specified, the default for --top (max
+number of files to show) changes to 999999 and that for --min (minimum size of
+file) changes to 1.  The idea is that `path_match` is often used to look for
+files, so we don't want to constrain that type of search unless asked to.
+
+## examples
+
+### simple usages
+
+  * Show top 10 files larger than 10k from local branches, remote branches,
+    and tags (the stash and the reflog are not checked here)
+
+        git dig
+        # defaults to 'git dig -- --branches --remotes --tags'
+        # for option defaults run with '-h'
+
+  * Show top 5 largest files from local branches.
+
+        git dig --top 5 -- --branches
+
+  * Show top 10 largest files whose pathnames contain 'foo' from local and
+    remote branches (but not tags)
+
+        git dig -pm foo -- --branches --remotes
+
+  * Show top 10 largest files whose pathnames contain 'bar' from local branches
+    'pu' and 'master' (note, no '--' separator required; however it is a good
+    habit to get into just in case).
+
+        git dig -pm bar pu master
+
+### looking for wasted space
+
+  * Find the top 10 largest files after `git gc --prune=now`
+
+        git dig --check_stash --check_reflog -- --all
+        # you can abbreviate those flags; run with '-h' or see next example
+
+    This will catch every possible file in the repo (assuming you ran that
+    'git gc'), and show you the top 10.  To see the top 50,
+
+        git dig --cs --crl --top=50 -- --all
+
+  * Find the largest files that are only in the stash or a reflog
+
+        git dig --cs --crl -- --not --all
+
+  * That last command, because of the '--not --all', would also miss some
+    unusual refs, like the 'refs/original' that git-filter-branch ends up
+    saving all your old commits to.  To see that and possibly any other such
+    non-standard commits
+
+        git dig --cs --crl --not --branches --remotes --tags
+
+    As you can see, that's a little longer to type but you can see where this
+    is going now.  This is the command to see everything that is not in a
+    "normal" branch (local or remote) or tag.
+
+## warnings
+
+### branch and tag of the same name
+
+If you have a repo where there is a branch and a tag of the same name, expect
+things not to work perfectly.

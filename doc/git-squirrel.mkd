@@ -1,0 +1,177 @@
+# F=git-squirrel squirrel away files and notes
+
+[[TOC]]
+
+## why
+
+Here are my two most common uses for this:
+
+  * I have plenty of files that I probably don't need again, but don't dare to
+    delete *right now*.  Since cleaning up the hard disk is a chore, I never
+    get around to doing it *later* and they hang around pretty much forever.
+
+  * A lot of artifacts at work are ODT/ODS/ODP, and I don't like using normal
+    git workflows with them due to merge issues.  Since the buck stops with me
+    on these docs, I simply choose to save them everyday using this mechanism.
+
+You can do most of the above with normal directories (except the part about
+versioning LibreOffice files), but I think having the files directly on disk
+is ugly and messy, not to mention too "in your face", for stuff you may never
+need.
+
+<font color="gray">A word about email: if *all* your work items come via
+email, it is certainly feasible to use the mail client itself to do all this.
+My problem is there is so much *more* junk (junk != spam, please note) on
+email, it slows down everything else.  There are dozens of attachments I don't
+even open, for instance.  With squirrel, I am only dealing with content that I
+at least had a passing interest in, and which has been on my hard disk, *other
+than* just sitting in my email, at some point.</font>
+
+I want to
+
+  * reduce clutter on my file system
+  * save arbitrary files in some categorised fashion
+  * save multiple revisions of the same file at regular intervals
+  * record accurately when they were saved (Unix timestamps are too fragile)
+  * allow me to delete them en-masse if needed
+  * get automatic de-dup for similar content
+  * get "better-than-unison" syncing between computers
+
+`git squirrel` is a tool to manage your own special "dump everything here" git
+repository.
+
+### usage by examples
+
+First, I have two git aliases (in `~/.gitconfig`) that look like this:
+
+    [alias]
+        z   =   squirrel --repo=/home/sitaram/imli/repos/squirrel
+        nb  =   squirrel --repo=/home/sitaram/imli/repos/notebook
+
+With these aliases, I never have to type out the actual 'squirrel' repository
+name, as you can see.  The commands below all save to that repo.
+
+  * save an arbitrary file or files
+
+        git z -s bills/2011 *-bill-payment-*.pdf
+
+    This saves the PDFs named to a branch called bills/2011
+
+  * save some files with a "commit message" (see tips section later for how
+    this may be useful)
+
+        git z -s reviews/2011 "first round of reviews" [...files...]
+
+  * regularly save some work-in-progress
+
+        git z -s reviews/2011 papers/*.pdf reviews/*.ods
+
+    You can do this everyday if you like, and only changes get recorded.
+
+  * list all branches, including remote branches which you have not yet
+    checked out local copies of
+
+        git z -l
+
+    same but list only branches containing 'foo' anywhere in the name
+
+        git z -l foo
+
+  * take a look at the entire repo using 'gitk'
+
+        git z -v
+
+    or just some branches
+
+        git z -v bills/2009 bills/2010
+
+    or all branches containing 'foo' anywhere in the name (see tips section
+    later for details on matching multiple branch names)
+
+        git z -v /foo
+
+    You can use 'tig' instead of 'gitk' by running with -v=tig instead of -v.
+
+    In both these cases, squirrel adds the --date-order option.
+
+  * restore a file or files quickly, using a branch name and one or more
+    filepath regexes
+
+        git z -r reviews/2011 access
+
+    This get you all files whose *path* (i.e., including directory part)
+    contains the word "access", from the branch called reviews/2011, to
+    `/tmp`.
+
+    See tips section later for other options (like how to save the files to
+    the current directory, etc)
+
+## cautions
+
+  * the repo should NOT be bare.  This *is* a work repo, except you're using
+    it via a special program.
+
+    For example, I have an equivalent repo on my other machines, and manual
+    syncs involve the usual push/pull between one central -- bare -- repo and
+    each of the work repos on different machines.
+
+    In other words, exactly the same as any other "working repo".
+
+  * for the same reasons, do not run one squirrel command when another one is
+    pending.  They both use the same repo/working tree!
+
+  * dont use it for files that are too large; this isn't anything
+    significantly different from other git repos.  This is not git-annexe or
+    bup :-)
+
+## tips
+
+  * the requirement for '--repo' (squirrel repo path) is cumbersome but the
+    fact is, most anyone should have at most one or two.  Use git aliases;
+    here are mine:
+
+        z   =   squirrel --repo=/home/sitaram/imli/squirrel
+        nb  =   squirrel --repo=/home/sitaram/imli/notebook
+
+    and I just say 'git z [...]' for the 'squirrel' repo, and 'git nb [...]'
+    for the notebook repo.  You could also use shell aliases.
+
+  * (all commands) you can use a regex pattern to reduce typing the branch
+    names.  For example:
+
+        git z -s /bills [...files to save...]
+
+    This will look at all branches that contain 'bills' anywhere, and pick the
+    last one (by sort order).  So if you have bills/2010, bills/2011, and
+    bills/2012, the 2012 one will be picked up.
+
+  * (list) you can use multiple regex patterns for the branch names, and they
+    will all be OR-ed together.  But don't use complex regexes; the OR-ing is
+    very simplistic.
+
+    Also, this one doesn't use "/" at the beginning to denote a pattern to
+    search for; they're all patterns anyway
+
+  * (restore) you can use multiple regex patterns for the dir/file names;
+    they're also OR-ed in the same way and the same cautions apply.
+
+  * (restore) you can specify where to put the restored files, by saying
+    `-r=.`, `-r=../foo`, etc., for paths relative to the current directory, or
+    `-r=/tmp/myfiles` for absolute paths.
+
+  * (restore) you can go to older commits by adding a commit subject/SHA
+    pattern:
+
+        git z -r=. reviews/2011 -cs=first.round filepatt [...]
+
+    The pattern, treated as a regex, is searched in the output of 'git log
+    --date-order --oneline' after checking out the given branch.
+
+  * (edit) you can use many 'git grep' options, but you need to put them after
+    a "--":
+
+        squirrel -e -- foo bar       # edit files containing foo *and* bar
+        squirrel -e -- foo --or bar  # edit files containing foo *or* bar
+
+    You'll also notice that git grep's default is --or, but we change it to
+    --and.  Be aware that internally, a '-l' and a '-i' are also prefixed.

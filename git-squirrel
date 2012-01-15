@@ -1,0 +1,421 @@
+#!/usr/bin/perl
+use 5.10.0;
+use strict;
+use warnings;
+
+use File::Path qw(make_path);
+
+# ----------------------------------------------------------------------
+
+use Getopt::Long;
+my ( $help, $repo, $view, $list, $edit, $save, $restore, $commit_match );
+GetOptions(
+    "help|h|?"          => \$help,           # this help text
+    "repo=s"            => \$repo,           # path to the "squirrel repo"
+    "view|v:s"          => \$view,           # invoke viewer (default gitk) with supplied
+                                             # arguments.  '-v tig' will invoke tig
+    "list|l"            => \$list,           # list branches and/or files
+                                             # (arg-1 is a branch regex, rest
+                                             # are optional path regexes)
+    "edit|e"            => \$edit,           # invoke editor
+    "save|s"            => \$save,           # invoke 'save' function
+    "restore|r:s"       => \$restore,        # invoke 'restore' function
+    "commit_match|cm=s" => \$commit_match    # commit match regex
+) or die "option error; maybe a typo or a missing '--' somewhere?\n";
+
+$view = 'gitk' if ( defined($view) and not $view );    # i.e., just '-v'
+
+usage() if $help;                                      # exits;
+
+# globals
+
+our @branches;                                         # local branches
+our $od;                                               # original directory
+
+# ----------------------------------------------------------------------
+
+# forward declarations for some subs; see end of file for code
+sub rc;
+sub text;
+sub lines;
+sub try;
+
+# ----------------------------------------------------------------------
+
+# init: does a lot of little things; go look there!
+init();
+
+# invoke gitk or tig as the case may be
+view(@ARGV) if $view;
+
+# list branches -- both local and remote -- and optionally files in them
+list(@ARGV) if $list;
+
+# invoke editor on selected file(s) in selected branch (or create a new file
+# with the arguments as "subject line")
+edit(@ARGV) if $edit;
+
+# save a bunch of files/dirs from $od onto named branch
+save(@ARGV) if $save;
+
+# restore a bunch of files/dirs from named branch to /tmp
+restore(@ARGV) if $restore;
+
+# DONE...
+
+# ----------------------------------------------------------------------
+# subroutines
+# ----------------------------------------------------------------------
+
+# init: clears GIT_ vars from ENV, saves old PWD, moves to $repo, makes sure
+# it's a valid repo and the tree is clean, and fill @branches
+sub init {
+
+    # $repo and $restore need some special handling, mainly making them absolute
+    $repo = "$ENV{PWD}/$repo" unless $repo =~ m(^/);
+    if ($restore) {
+        $restore = "/tmp" if $restore eq "1";    # default directory if none given
+        $restore = "$ENV{PWD}/$restore" unless $restore =~ m(^/);    # since PWD will change soon...
+        die "$restore should be a directory" unless -d $restore;
+    }
+
+    die "can't find directory '$repo'" unless ( $repo and -d $repo );
+
+    # clear the environment; this is a rough approximation for:
+    #   unset `git rev-parse --local-env-vars`
+    delete @ENV{ grep /^GIT_/, keys %ENV };
+
+    # save the old PWD and move to the new repo
+    $od = $ENV{PWD};
+    chdir($repo);
+
+    try "git symbolic-ref HEAD" or die "DETACHED HEAD or no repo: " . text;
+
+    # insist on a clean tree, not even untracked or ignored files
+    try "git status -s --ignored";
+    die "tree is dirty:\n", text if text;
+
+    @branches = branches();
+
+    # no local branches?
+    unless (@branches) {
+        try("git commit -m start-repo --allow-empty");
+    }
+
+    $SIG{__DIE__} = sub {
+        co_f('master');
+      }
+}
+
+sub view {
+    my (@br);
+
+    # for each argument, if it starts with a "/", remove it and expand the
+    # list with matching branch names
+    for my $br (@_) {
+        if ( $br =~ s(^/)() ) {
+            push( @br, grep( /$br/, @branches ) );
+        } else {
+            push @br, $br;
+        }
+    }
+    @br = ('--all') unless @_;
+    die "no matching branches..." unless @br;
+
+    system( $view, "--date-order", @br );
+
+    exit;
+}
+
+sub list {
+    # the first pattern is a branch pattern, the rest are file patterns
+    die "
+need one branchname regex pattern (just '.' will do if you're not sure what
+branch you need), and one or more filename regex patterns.\n" unless @_;
+    my $bpatt = shift;
+    my $fpatt = join( "|", @_ );
+
+    # no file patterns given; print branch names and get out
+    unless ($fpatt) {
+        map { say } grep { /$bpatt/ } @branches;
+        return;
+    }
+
+    for my $br ( grep { /$bpatt/ } lines() ) {
+        try "git ls-tree -r --name-only $br" or die "ls-tree $br failed";
+        map { say "$br\t$_" } grep { /$fpatt/ } lines();
+    }
+}
+
+sub branches {
+    try "git for-each-ref '--format=%(refname:short)' refs/heads"
+      or die "for-each-ref failed";
+    return sort( lines() );
+}
+
+sub co_f {
+    my $br = shift;    # could be empty
+    say "switching to $br...";
+    try("git checkout -f $br") or die "'git checkout -f $br' failed: " . text;
+}
+
+sub edit {
+    my $br = shift;    # branch
+    my $cm;            # commit message
+    chomp( $cm = `date +%F.%T` );
+    $cm .= " -- " . join( " ", @_ );
+
+    die "need patterns to search" unless @_;
+    switch_to( $br, 'create' );
+
+    # checkout the branch
+    co_f($br);
+
+    # massage git-grep arguments; we default to --and, not --or, for example
+    my $grepargs = default_and(@_);
+    # find files with matching content
+    try("git grep $grepargs");
+    # if none were found, create a new one (and add it to the index)
+    my @files = lines;
+    @files = new_file(@_) unless @files;
+    # and finally edit
+    system( ( $ENV{VISUAL} || $ENV{EDITOR} || "vim" ), @files );
+
+    # add and commit only if there are any work tree changes
+    if ( work_tree_changed() ) {
+        # now add the files/dirs requested.  Note the user may have added new
+        # files or deleted offered ones using the editor, so -A is best
+        try("git add -A") or die "'git add .' failed: " . text;
+
+        # come back to base and commit
+        try("git commit -m '$cm'") or die "'git commit' failed: " . text;
+    }
+
+    # clean up
+    co_f($br);
+
+    exit;
+}
+
+sub work_tree_changed {
+    try("git ls-files -m -o -d");
+    return ( text =~ /./ );
+}
+
+sub switch_to {
+    my ( $br, $option ) = @_;
+    # possible options: create (if not found)
+    # also, if $br starts with a "/" it means we find matches (in descending
+    # sort order, so that dates come out nicely) and pick the first one
+
+    if ( $br ~~ @branches ) {
+        # exact branch name given; life is simple
+        co_f($br);
+        return;
+    }
+
+    # no leading slash (i.e., no 'search' requested).
+    if ( $br !~ m(^/) ) {
+
+        # no 'create' option given (coming from 'restore')
+        die "branch $br not found" unless $option and $option eq 'create';
+
+        # create (coming from 'edit' or 'save')
+        # the first checkout is in case we had a remote branch already
+        try("git checkout -f $br || { git rm -r .; git checkout --orphan $br; git commit --allow-empty -m empty; }")
+          or die "creating a new empty branch failed: " . text;
+        return;
+    }
+
+    $br =~ s(^/)();
+
+    # now find matches
+    my @br = sort { $b cmp $a } grep /$br/, @branches;
+    die "no matches found for $br" unless @br;
+    $br = shift @br;
+    say "selected $br";
+    say "    (others: " . join( ", ", @br ) . ")" if @br;
+
+    co_f($br);
+}
+
+sub default_and {
+    my $ret  = "-l -i";
+    my $word = 0;
+    for my $i (@_) {
+        $ret .= " --and" if ( $word and $i !~ /^-/ );
+        $ret .= " -e $i";
+        $word = ( $i !~ /^-/ );
+    }
+    return $ret;
+}
+
+sub new_file {
+    # generate file name from arguments, populate it with those arguments as
+    # the first line
+    my $fn = join( "-", @_ );
+    $fn =~ s([^-\w,.:+=/]+)(-)g;
+    if ( $fn =~ m(/) ) {
+        my $dir = $fn;
+        $dir =~ s(/[^/]+$)() or die "try not to end things with a '/'";
+        make_path($dir);    # for now we don't check any errors here
+    }
+    system( "echo '" . join( " ", @_ ) . "' > '$fn'" );
+    system( "git", "add", $fn );
+    return $fn;
+}
+
+sub save {
+    my $br = shift;         # branch
+    my $cm;                 # commit message
+    chomp( $cm = `date +%F.%T` );
+
+    die "need dirs/files to 'save'" unless @_;
+
+    # switch to the branch named (or create a new one)
+    switch_to( $br, 'create' );
+
+    # optional "commit message" (identified by "oh this is neither a file nor
+    # a directory name in the original directory"!)
+    chdir($od);
+    unless ( -f $_[0] or -d $_[0] ) {
+        $cm = shift() . " -- $cm";
+    }
+
+    # now add the files/dirs requested
+    $ENV{GIT_DIR} = "$repo/.git";
+    system( "git", "add", @_ ) and die "'git add' failed: $!";
+
+    # come back to base and commit
+    chdir($repo);
+    delete $ENV{GIT_DIR};
+    try("git commit -m '$cm'") or die "'git commit' failed: " . text;
+
+    # checkout -f to keep the tree clean
+    co_f('HEAD');
+
+    exit;
+}
+
+sub restore {
+    my $br = shift;    # branch
+
+    # switch to the branch name (or first match to pattern) passed
+    switch_to($br);
+
+    # if no dir/file patterns are passed, just use "." to grab all of them
+    @_ = ('.') unless @_;
+
+    my $patt = join( "|", @_ );
+
+    # find and checkout a specific commit sha is -cs was passed
+    co_f( find_commit($commit_match) ) if $commit_match;
+
+    try("git ls-tree -r --name-only HEAD") or die "no files in branch";
+    my @files = lines;
+    @files = grep /$patt/, @files;
+    die "no files match '$patt'" unless @files;
+
+    system( "cp", "-v", "--parents", @files, $restore );
+
+    # keep the tree clean and reattach HEAD if needed
+    co_f($br);
+
+    exit;
+}
+
+sub find_commit {
+    my $cs = shift;
+
+    # use the first match from "git log --oneline".  There may be the
+    # occasional false match due to a 'deadbeef'-like sha accidentally
+    # matching text, but meh!
+
+    try("git log --date-order --oneline") or die "git log --oneline failed " . text;
+    my ($l) = grep /$cs/, lines;    # take first matching line only
+    die "no commit found matching $cs" unless $l;
+    say "commit found: $l";
+    $l =~ s/ .*//;                  # leaves the 7-digit SHA there
+
+    return $l;
+}
+
+# ----------------------------------------------------------------------
+
+sub usage {
+    # I don't like POD.  This is not up for discussion.
+
+    say "
+git-squirrel -- squirrel away files or quick notes on things
+";
+
+    @ARGV = ($0);
+    while (<>) {
+        next unless /^\s*GetOptions/ .. /^\s*\)/;
+        next if /^\s*GetOptions/ or /^\s*\)/;
+
+        my $op = '';
+        if (/"(.*?)"/) {
+            $op = "  " . join( ", ", map { s/[=:][sif]$//; /../ ? "--$_" : "-$_" } split /\|/, $1 );
+            print $op;
+        }
+        print( " " x ( 30 - length($op) ) );
+
+        s/.*#/#/;
+        print;
+    }
+
+    say "
+Notes:
+  - the 'repo' option is mandatory (now *there*'s an oxymoron!).  It's
+    convenient to have
+        git config alias.z 'squirrel --repo=/path/to/squirrel'
+    The examples below assume this.
+  - the repo must be a non-bare repo.  See the documentation for more.
+  - separate squirrel arguments from arguments passed to gitk etc., using '--'
+  - '-r' saves to /tmp, '-r=.' saves to current directory.  See doc for more.
+  - 'br' stands for a branch name or pattern.  'foo' is a branch name, while
+    '/foo' (leading '/') is a pattern.  Supplying '/foo' will pick the first
+    branch (in descending lex order) that contains 'foo' (treated as a regex)
+    anywhere in the name.
+
+Quick examples:
+    git z -s br 'optional commit message' list of dirs/files
+    git z -r br list of dir/file_regexes
+    git z -e br TODO
+
+THIS LIST OF OPTIONS IS INCOMPLETE; please see git-squirrel.mkd for more (for
+example, how to restore files to elsewhere than /tmp).  There are also some
+really important notes and cautions there.
+";
+
+    exit 1;
+}
+
+# ----------------------------------------------------------------------
+
+# bare-minimum subset of 'Tsh' (see github.com/sitaramc/tsh)
+{
+    my ( $rc, $text );
+    sub rc   { return $rc   || 0; }
+    sub text { return $text || ''; }
+    sub lines { return split /\n/, $text; }
+
+    sub try {
+        my $cmd = shift; die "try: expects only one argument" if @_;
+        $text = `( $cmd ) 2>&1; echo -n RC=\$?`;
+        if ( $text =~ s/RC=(\d+)$// ) {
+            $rc = $1;
+            return ( not $rc );
+        }
+        die "couldnt find RC= in result; this should not happen:\n$text\n\n...\n";
+    }
+}
+
+sub dbg {
+    use Data::Dumper;
+    for my $i (@_) {
+        print STDERR "DBG: " . Dumper($i);
+    }
+}
+

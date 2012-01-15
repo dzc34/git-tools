@@ -1,0 +1,107 @@
+# a few git-based tools
+
+All these programs respond to '--help', '-h', etc., for quick help.  Some
+programs may have additional documentation available; see below.
+
+Briefly:
+
+  * git ls: list files with pathnames matching given regexes in current branch
+    or, optionally, all local branches, remote branches, or tags.
+
+  * git dig: dig through your repo for large files, files with pathnames
+    matching a regex, etc.  If git-dig can't find a file, it's in an
+    unreachable commit or had been gc-d.
+
+  * git branch-check: checks what branches you have that your remotes don't
+    have, and for the common ones, how many commits are different.
+
+----
+
+  * `git-ls`: given a list of regex patterns, git-ls matches these to
+    pathnames (not just the basename of the file) and
+
+  * `git-dig` finds files in your git repository.  You can look for large
+    files hiding in your repo, and/or you can look for files based on a
+    partial match of the filename.  You can look for them in your local
+    branches, tags, remote branches, the stash, or the reflog.  Or all of
+    them. Or any combination of them.
+
+    For instance, `git dig --check_stash --check_reflog -- --all` will find
+    pretty much *any* file in your repo except from unreachable commits (i.e.,
+    not even in the reflog anymore).
+
+    Even better, `git dig --check_stash --check_reflog -- --not --all` will
+    find you only those files that are in your stashes or reflog but *not* in
+    any of your branches or tags.
+
+    See [here](http://sitaramc.github.com/git-tools/git-dig.html) or in the
+    file doc/git-dig.mkd for more examples.
+
+  * `git-branch-check` checks your working repo's branches and the current
+    "updatedness" of each branch vis-a-vis all remote branches of the same
+    name, as well as all other local branches.  It'll show you what branches
+    you have that the remotes don't, and vice versa.
+
+    When matching branches are found, it'll show you if they're out of sync
+    ('git branch -v -v' will only show you for the 'upstream' but you might
+    have other remotes you also push to).
+
+    This is meant to be interactive, using colors, green for stuff that is
+    extra on the local side, red for the other side.  See the end of this
+    document for sample output.
+
+    In addition, it can also fast-forward all your local branches if their
+    upstreams have moved ahead.
+
+  * `git-squirrel` helps you abuse git to "squirrel away" files you might
+    never need but are afraid to delete, work-in-progress items that don't
+    have their own repos, etc., simply and quickly.
+
+    Full documentation
+    [here](http://sitaramc.github.com/git-tools/git-squirrel.html) or in the
+    file doc/git-squirrel.mkd.
+
+## sample output
+
+### git-branch-check
+
+<html>
+
+<style>
+    pre        { background:  #fff !important; }
+</style>
+
+<pre>
+
+gcode:
+	<font color="green">foo, gh-pages, q</font>
+git95:
+	<font color="green">foo, gh-pages</font>
+	<font color="red">bp-v2.0.3, pu-ssh-plus, rrr, temp-br--data-dumper-problem-demo</font>
+github:
+	<font color="green">foo, q</font>
+	<font color="red">bp-v2.0.3, fedora-temp, temp-br--data-dumper-problem-demo</font>
+
+current branch: pu
+checking 6 of 6 local branches
+   <font color="green">2</font>        pu...gcode/pu
+  <font color="green">16</font>        pu...master
+   <font color="green">1</font>   <font color="red">2</font>    pu...q
+   <font color="green">4</font>   <font color="red">7</font>    pu...vrs
+      <font color="red">17</font>    master...q
+      <font color="red">19</font>    master...vrs
+   <font color="green">5</font>   <font color="red">7</font>    q...vrs
+
+</pre>
+
+</html>
+
+As you can see, I have 3 remotes.  Ignoring the test branches, it tells me I
+don't send the 'gh-pages' branch to gcode or git95.  There are also branches
+on github and git95 that are not on my local repo (the commits may be there
+but no local checkout).
+
+I have 2 commits on 'pu' that I am yet to send to gcode, though the others
+look fine.  The relationship between my local branches is also shown (if
+they're "near" enough).  For example, my 'pu' is 16 commits ahead of 'master'.
+

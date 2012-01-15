@@ -1,0 +1,263 @@
+#!/usr/bin/perl
+use 5.10.0;
+use strict;
+use warnings;
+
+# ----------------------------------------------------------------------
+
+use Getopt::Long;
+my ( $help, $cbo, $cro, $max_diff, $ff );
+GetOptions(
+    "help|h|?"    => \$help,        # this help text
+    "current|c"   => \$cbo,         # act upon current branch only
+    "remote|r"    => \$cro,         # compare with remote only; do not compare local-to-local branches
+    "max_diff|md" => \$max_diff,    # max diff (default 100; see below for details)
+    "ff"          => \$ff,          # don't just check, try to fast forward also
+) or die "option error; maybe a typo or a missing '--' somewhere?\n";
+
+$max_diff ||= 100;
+
+# get this over with; usage() exits so don't worry
+usage() if $help;
+
+# globals
+
+# ----------------------------------------------------------------------
+
+# forward declarations for some subs; see end of file for code
+sub rc;
+sub text;
+sub lines;
+sub try;
+
+# ----------------------------------------------------------------------
+
+# get current branch
+my $current = '';
+try "git symbolic-ref HEAD" or die "DETACHED HEAD or no repo";
+( $current = (lines)[0] ) =~ s(refs/heads/)();
+
+# get branch names
+# first, all local branches as keys of a hash with upstream name if any, as the value
+my %upstream;
+try "git for-each-ref --perl '--format=\$upstream{%(refname:short)} = %(upstream:short);' refs/heads"
+  or die "for-each-ref 1 failed";
+eval text;
+
+# local branches as a list; keep $current at the top, and the rest sorted
+my @local = ( $current, grep { $_ ne $current } sort keys %upstream );
+
+# remote branches as a list
+try "git for-each-ref '--format=%(refname:short)' refs/remotes"
+  or die "for-each-ref 2 failed";
+my @remote = lines;
+
+# decide what branches to act upon.  Default: all local branches.  If any
+# arguments are given, then those.  If '-c' is passed, only current branch.
+my @branches = @local;
+@branches = @ARGV      if @ARGV;
+@branches = ($current) if $cbo;
+
+# (TODO: put it in its own function)
+# extras on either side, only if default selection (all)
+unless ( $cbo or @ARGV ) {
+    try("git remote");
+    my @remotes = lines;
+    for my $r (@remotes) {
+        my @extra_in_local = grep { not "$r/$_" ~~ @remote } @local;
+        my @extra_in_remote = grep { not $_ ~~ @local and not $_ eq 'HEAD' } map { m(^$r/(.*)) && $1 } grep /^$r\//, @remote;
+        print "$r:\n" if @extra_in_local or @extra_in_remote;
+        print "\t", color('green'), join( ", ", @extra_in_local ),  color('reset'), "\n" if @extra_in_local;
+        print "\t", color('red'),   join( ", ", @extra_in_remote ), color('reset'), "\n" if @extra_in_remote;
+    }
+    print "\n";
+}
+
+say "current branch: $current";
+say "checking " . scalar(@branches) . " of " . scalar(@local) . " local branches";
+
+# ----------------------------------------------------------------------
+
+# show the tree state if it's dirty
+print "dirty:\n", text if dirty();
+
+# process selected branches
+for my $b (@branches) {
+    # attempt a fast-forward if -ff is passed
+    ff( $b, $upstream{$b}, $current ) if ($ff);
+    # check against its own upstream
+    check( $b, $upstream{$b} );
+    # then against all remote branches of the same name (I typically have
+    # my own gitolite server as 'upstream' but also have github and google
+    # code as additional remotes that I push my branches to)
+    check( $b, grep( m(^[^/]+/$b$), @remote ) );
+}
+exit if $cro;
+# ...then against all local branches.  We do this in a separate loop
+# so their output is kept separate from the remote compares above.
+for my $b (@branches) {
+    check( $b, @local );
+}
+
+# DONE...
+
+# ----------------------------------------------------------------------
+# subroutines
+# ----------------------------------------------------------------------
+
+sub ff {
+    # b=branch, u=upstream, c=current
+    my ( $b, $u, $c ) = @_;
+
+    unless ($u) {
+        say "$b does not have an upstream";
+        return;
+    }
+
+    if ( $b eq $c and dirty() ) {
+        say "working tree is dirty; skipping ff for (current branch) $b";
+        return;
+    }
+
+    # $l = number of commits "l"eft side has over the "r"ight (similarly $r...)
+    my ( $l, $r ) = compare( $b, $u );
+    if ( $r and not $l ) {
+        # there is something to update, and ff is possible
+        if ( $b eq $c ) {
+            # current branch; needs an actual merge
+            try("git merge --ff-only $u") or die "$b: 'git merge --ff-only $u' failed:\n" . text;
+        } else {
+            # other branches can be forced
+            try("git branch -f $b $u") or die "$b: 'git branch -f $b $u' failed:\n" . text;
+        }
+    }
+}
+
+sub check {
+    my ( $b, @list ) = @_;
+    state %seen;
+
+    for my $u (@list) {
+        next unless $u;
+        next if $b eq $u or $seen{$b}{$u};
+        # seeing a...b is as good as seeing b...a also
+        $seen{$b}{$u} = 1;
+        $seen{$u}{$b} = 1;
+
+        my ( $l, $r ) = compare( $b, $u );
+
+        my $abs = $l + $r; next unless $abs;    # if they're equal, don't show it
+        next if $abs >= $max_diff;              # if they're too far apart, don't show it
+
+        print spacepad( 4, $l ) . color('green') . ( $l || ' ' );
+        print spacepad( 4, $r ) . color('red') .   ( $r || ' ' );
+        say color('reset') . "    $b...$u";
+    }
+}
+
+sub compare {
+    my ( $b, $u ) = @_;
+
+    try("git rev-list $u..$b") or die "'git rev-list $u..$b' failed:\n" . text;
+    my $l = lines;
+
+    try("git rev-list $b..$u") or die "'git rev-list $b..$u' failed:\n" . text;
+    my $r = lines;
+
+    return ( $l, $r );
+}
+
+sub dirty {
+    try "git status -s -uno | cut -c1-2 | sort | uniq -c";
+    return ( text =~ /./ );
+}
+
+sub color {
+    my $color = shift;
+    return `git config --get-color "" $color`;
+}
+
+sub spacepad {
+    return " " x ( $_[0] - length( $_[1] ) );
+}
+
+# ----------------------------------------------------------------------
+
+sub usage {
+    # I don't like POD.  This is not up for discussion.
+
+    say "
+git-branch-check -- check how in sync your local and remote branches are
+";
+
+    @ARGV = ($0);
+    while (<>) {
+        next unless /^\s*GetOptions/ .. /^\s*\)/;
+        next if /^\s*GetOptions/ or /^\s*\)/;
+
+        my $op = '';
+        if (/"(.*?)"/) {
+            $op = "  " . join( ", ", map { s/[=:][sif]$//; /../ ? "--$_" : "-$_" } split /\|/, $1 );
+            print $op;
+        }
+        print( " " x ( 30 - length($op) ) );
+
+        s/.*#/#/;
+        print;
+    }
+
+    say "
+--md:
+    Local <-> local compares make sense because you often want to know how far
+    apart are 'pu' and 'master', for instance.  But sometimes the branches are
+    so far apart that they may not be related, so it doesn't make sense (like
+    'master' and 'html' on the git.git repo).  Use this option to control how
+    far they can be before the details are suppressed.
+-r:
+    Even with --md, if you have far too many local branches, local <-> local
+    compares become meaningless.  Stop them completely using this option.
+";
+
+    exit 1;
+}
+
+# ----------------------------------------------------------------------
+
+# bare-minimum subset of 'Tsh' (see github.com/sitaramc/tsh)
+{
+    my ( $rc, $text );
+    sub rc   { return $rc   || 0; }
+    sub text { return $text || ''; }
+    sub lines { return split /\n/, $text; }
+
+    sub try {
+        my $cmd = shift; die "try: expects only one argument" if @_;
+        $text = `( $cmd ) 2>&1; echo -n RC=\$?`;
+        if ( $text =~ s/RC=(\d+)$// ) {
+            $rc = $1;
+            return ( not $rc );
+        }
+        die "couldnt find RC= in result; this should not happen:\n$text\n\n...\n";
+    }
+}
+
+sub dbg {
+    use Data::Dumper;
+    for my $i (@_) {
+        print STDERR "DBG: " . Dumper($i);
+    }
+}
+
+__END__
+
+# test suite; pipe it to 'bash -l'
+tmp
+TSH_VERBOSE=1 tsh 'init --bare b; clone b c
+cd c; dc a b c; checkout -b new; dc q w e; push -u --all
+cd ..; clone b d; cd d; dc m1 m2; checkout new; dc j k l; push origin new
+cd ../c; checkout master; dc p o i; push origin master
+cd ../c; fetch; git ba; /new: behind 3/ or TEST 1 FAIL
+git bc -ff; git ba; !/new: behind 3/ or TEST 1b FAIL
+cd ../d; fetch; git ba; /master: ahead 2, behind 3/ or TEST 2 FAIL
+git bc -ff; git ba; /master: ahead 2, behind 3/ or TEST 2b FAIL; cd ..'
+

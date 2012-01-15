@@ -1,0 +1,181 @@
+#!/usr/bin/perl
+use 5.10.0;
+use strict;
+use warnings;
+
+# ----------------------------------------------------------------------
+
+use Getopt::Long;
+my ( $help, $branches, $remotes, $tags, $br_incl, $br_excl );
+#<<<
+GetOptions(
+    "help|h|?"   => \$help,        # this help text
+    "branches|b" => \$branches,    # check local branches also
+    "remotes|r"  => \$remotes,     # check remotes also
+    "tags|t"     => \$tags,        # check tags also
+) or die "option error; please run with '-h' for help\n";
+#>>>
+
+usage() if $help;    # exits;
+
+# globals
+
+# ----------------------------------------------------------------------
+
+# forward declarations for some subs; see end of file for code
+sub rc;
+sub text;
+sub lines;
+sub try;
+
+# ----------------------------------------------------------------------
+
+# combine search pattern
+my $patt = join "|", @ARGV;
+
+# HEADs to look at, including current one
+my @heads;
+
+# get current branch
+my $current = 'HEAD';
+try "git symbolic-ref HEAD" and ( $current = (lines)[0] ) =~ s(refs/heads/)();
+
+push @heads, '--branches' if $branches;
+push @heads, '--remotes'  if $remotes;
+push @heads, '--tags'     if $tags;
+@heads = ($current) unless @heads;
+
+@heads = leaf_only(@heads);
+
+my %seen;
+# after all that buildup, this is somewhat of an anti-climax!
+for my $h (@heads) {
+    try("git ls-tree -r --name-status $h") or die "ls-tree $h failed";
+    map { print "$h\t"; say } grep( /$patt/, lines() );
+}
+
+# DONE...
+
+# ----------------------------------------------------------------------
+# subroutines
+# ----------------------------------------------------------------------
+
+sub replace_full_refs {
+    my @refs;
+    local @_ = @_;    # defeat the implicit aliasing in the 'for' loop below
+
+    for my $r (@_) {
+        $r =~ s(^refs/(heads|tags|remotes)/)();    # was a proper ref
+        push @refs, $r;
+    }
+
+    return @refs;
+}
+
+# kill the internal nodes (there should be a git supplied way to do this, no?)
+sub leaf_only {
+    my @rev_parse_args = @_;
+    my ( %nonleaf, %leaf );
+
+    my $cmd = "git rev-parse --symbolic " . join( " ", @rev_parse_args );
+    chomp( my @refs = `$cmd` );
+    @refs = replace_full_refs(@refs);
+
+    # '--simplify-by-decoration' is key -- with that flag, git prints the next
+    # decoration line's SHA (which may in reality be many commits ago) as the
+    # parent instead of the real parent commit.
+
+    $cmd = "git log --format=%h:%p:%d --simplify-by-decoration " . join( " ", @rev_parse_args );
+    for (`$cmd`) {
+        chomp;
+        my ( $h, $p, $d ) = split /:/;
+
+        # mark parents as non-leaf
+        for my $p1 ( split ' ', $p ) {
+            $nonleaf{$p1}++;
+        }
+
+        # if we're non-leaf, we're done; bail out
+        next if $nonleaf{$h};
+
+        # find our decorations
+        if ($d) {
+            $d =~ s/ \(//;
+            $d =~ s/\)//;
+            my @d = split /, /, $d;
+
+            # check our list of refs in order
+            for my $r (@refs) {
+                if ( $r ~~ @d ) {
+                    $leaf{$r} = 1;    # and mark the first
+                    last;             # don't mark any of the others
+                }
+            }
+        }
+    }
+
+    # return leaf refs, preserving the original order of @refs
+    return grep { $leaf{$_} } @refs;
+}
+
+# ----------------------------------------------------------------------
+
+sub usage {
+    # I don't like POD.  This is not up for discussion.
+
+    say "
+git-ls -- list files in repo
+
+Usage: git ls [options] [list of pathname regexes]
+";
+
+    @ARGV = ($0);
+    while (<>) {
+        next unless /^\s*GetOptions/ .. /^\s*\)/;
+        next if /^\s*GetOptions/ or /^\s*\)/;
+
+        my $op = '';
+        if (/"(.*?)"/) {
+            $op = "  " . join( ", ", map { s/[=:][sif]$//; /../ ? "--$_" : "-$_" } split /\|/, $1 );
+            print $op;
+        }
+        print( " " x ( 30 - length($op) ) );
+
+        s/.*#/#/;
+        print;
+    }
+
+    say "
+By default, only the current branch is checked.
+";
+
+    exit 1;
+}
+
+# ----------------------------------------------------------------------
+
+# bare-minimum subset of 'Tsh' (see github.com/sitaramc/tsh)
+{
+    my ( $rc, $text );
+    sub rc   { return $rc   || 0; }
+    sub text { return $text || ''; }
+    sub lines { return split /\n/, $text; }
+
+    sub try {
+        my $cmd = shift; die "try: expects only one argument" if @_;
+        $text = `( $cmd ) 2>&1; echo -n RC=\$?`;
+        if ( $text =~ s/RC=(\d+)$// ) {
+            $rc = $1;
+            return ( not $rc );
+        }
+        die "couldnt find RC= in result; this should not happen:\n$text\n\n...\n";
+    }
+}
+
+sub dbg {
+    use Data::Dumper;
+    for my $i (@_) {
+        print STDERR "DBG: " . Dumper($i);
+    }
+}
+
