@@ -80,23 +80,24 @@ say "checking " . scalar(@branches) . " of " . scalar(@local) . " local branches
 
 # show the tree state if it's dirty
 print "dirty:\n", text if dirty();
+say "";
 
 # process selected branches
 for my $b (@branches) {
     # attempt a fast-forward if -ff is passed
     ff( $b, $upstream{$b}, $current ) if ($ff);
     # check against its own upstream
-    check( $b, $upstream{$b} );
+    check( $b, 1, $upstream{$b} );
     # then against all remote branches of the same name (I typically have
     # my own gitolite server as 'upstream' but also have github and google
     # code as additional remotes that I push my branches to)
-    check( $b, grep( m(^[^/]+/$b$), @remote ) );
+    check( $b, 1, grep( m(^[^/]+/$b$), @remote ) );
 }
 exit if $cro;
 # ...then against all local branches.  We do this in a separate loop
 # so their output is kept separate from the remote compares above.
 for my $b (@branches) {
-    check( $b, @local );
+    check( $b, 0, @local );
 }
 
 # DONE...
@@ -134,8 +135,11 @@ sub ff {
 }
 
 sub check {
-    my ( $b, @list ) = @_;
+    my ( $b, $color_names, @list ) = @_;
     state %seen;
+    my $Cr = color('red');
+    my $Cg = color('green');
+    my $Cb = color('reset');
 
     for my $u (@list) {
         next unless $u;
@@ -149,9 +153,12 @@ sub check {
         my $abs = $l + $r; next unless $abs;    # if they're equal, don't show it
         next if $abs >= $max_diff;              # if they're too far apart, don't show it
 
-        print spacepad( 4, $l ) . color('green') . ( $l || ' ' );
-        print spacepad( 4, $r ) . color('red') .   ( $r || ' ' );
-        say color('reset') . "    $b...$u";
+        print spacepad( 4, $l ) . $Cg . ( $l || ' ' );
+        print spacepad( 4, $r ) . $Cr . ( $r || ' ' );
+        say( $color_names
+            ? "$Cb    $Cg$b$Cb...$Cr$u$Cb"
+            : color('reset') . "    $b...$u"
+        );
     }
 }
 

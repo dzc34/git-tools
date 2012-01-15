@@ -80,7 +80,7 @@ files, so we don't want to constrain that type of search unless asked to.
     saving all your old commits to.  To see that and possibly any other such
     non-standard commits
 
-        git dig --cs --crl --not --branches --remotes --tags
+        git dig --cs --crl -- --not --branches --remotes --tags
 
     As you can see, that's a little longer to type but you can see where this
     is going now.  This is the command to see everything that is not in a

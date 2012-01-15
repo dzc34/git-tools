@@ -1,7 +1,8 @@
 # a few git-based tools
 
-All these programs
+These programs...
 
+  * are independent of each other
   * can be installed simply by copying them somewhere in your $PATH (they do
     require perl 5.10.0 or later though)
   * respond to '--help', '-h', etc., for quick help (some programs may have
@@ -9,27 +10,28 @@ All these programs
 
 Briefly:
 
-  * git ls: list files with pathnames matching given regexes in current branch
+  * git ls: List files with pathnames matching given regexes in current branch
     or, optionally, all local branches, remote branches, or tags.
 
-  * git dig: dig through your repo for large files, files with pathnames
+  * git dig: Dig through your repo for large files, files with pathnames
     matching a regex, etc.  If git-dig can't find a file, it's in an
     unreachable commit or had been gc-d.
 
-  * git branch-check: checks what branches you have that your remotes don't
-    have, and for the common ones, how many commits are different.
+  * git branch-check: Checks what branches you have that your remotes don't
+    have and vice-versa, and for the common ones, how many commits are
+    different.
 
 ----
 
-  * `git-ls`: given a list of regex patterns, git-ls matches these to
+  * `git-ls`: Given a list of regex patterns, git-ls matches these to
     pathnames (not just the basename of the file) and finds all matching files
     in the current branch.  You can add options to search all local branches,
-    remote branches, and tags.  Options can be combined, so '-b -r' checks
+    remote branches, and tags.  Options can be combined, so '-l -r' checks
     local and remote branches but not the tags.
 
     See the inline help for some more info.
 
-  * `git-dig` finds files in your git repository.  You can look for large
+  * `git-dig`: Finds files in your git repository.  You can look for large
     files hiding in your repo, and/or you can look for files based on a
     partial match of the filename.  You can look for them in your local
     branches, tags, remote branches, the stash, or the reflog.  Or all of
@@ -46,7 +48,7 @@ Briefly:
     See [here](http://sitaramc.github.com/git-tools/git-dig.html) or in the
     file doc/git-dig.mkd for more examples.
 
-  * `git-branch-check` checks your working repo's branches and the current
+  * `git-branch-check`: Checks your working repo's branches and the current
     "updatedness" of each branch vis-a-vis all remote branches of the same
     name, as well as all other local branches.  It'll show you what branches
     you have that the remotes don't, and vice versa.
@@ -62,7 +64,7 @@ Briefly:
     In addition, it can also fast-forward all your local branches if their
     upstreams have moved ahead.
 
-  * `git-squirrel` helps you abuse git to "squirrel away" files you might
+  * `git-squirrel`: Helps you abuse git to "squirrel away" files you might
     never need but are afraid to delete, work-in-progress items that don't
     have their own repos, etc., simply and quickly.
 
@@ -93,7 +95,7 @@ github:
 
 current branch: pu
 checking 6 of 6 local branches
-   <font color="green">2</font>        pu...gcode/pu
+   <font color="green">2</font>        <font color="green">pu</font>...<font color="red">gcode/pu</font>
   <font color="green">16</font>        pu...master
    <font color="green">1</font>   <font color="red">2</font>    pu...q
    <font color="green">4</font>   <font color="red">7</font>    pu...vrs
