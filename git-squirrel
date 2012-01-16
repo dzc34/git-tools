@@ -141,16 +141,32 @@ branch you need), and one or more filename regex patterns.\n" unless @_;
         return;
     }
 
-    for my $br ( grep { /$bpatt/ } lines() ) {
+    for my $br ( grep { /$bpatt/ } @branches ) {
         try "git ls-tree -r --name-only $br" or die "ls-tree $br failed";
         map { say "$br\t$_" } grep { /$fpatt/ } lines();
     }
 }
 
+# get all local branches and remote branches.  For remote branches, just make
+# them local using 'git branch'
 sub branches {
-    try "git for-each-ref '--format=%(refname:short)' refs/heads"
-      or die "for-each-ref failed";
-    return sort( lines() );
+    my @branches;
+
+    # first get the local branches
+    chomp(@branches = sort `git rev-parse --symbolic --branches`);
+
+    # then the remotes, but with the remote name stripped.  If you have a
+    # funky remote name like aa/bb, you're on your own.
+    for my $br ( sort `git rev-parse --symbolic --remotes` ) {
+        chomp($br);
+        (my $lbr = $br) =~ s(^[^/]+/)();
+        next if $lbr ~~ @branches or $lbr eq 'HEAD';
+        try("git branch $lbr $br") or die "'git branch $lbr $br' failed: " . text;
+        push @branches, $lbr;
+    }
+
+    chomp(@branches);
+    return @branches;
 }
 
 sub co_f {
@@ -166,7 +182,7 @@ sub edit {
     $cm .= " -- " . join( " ", @_ );
 
     die "need patterns to search" unless @_;
-    switch_to( $br, 'create' );
+    $br = switch_to( $br, 'create' );
 
     # checkout the branch
     co_f($br);
@@ -211,7 +227,7 @@ sub switch_to {
     if ( $br ~~ @branches ) {
         # exact branch name given; life is simple
         co_f($br);
-        return;
+        return $br;
     }
 
     # no leading slash (i.e., no 'search' requested).
@@ -224,7 +240,7 @@ sub switch_to {
         # the first checkout is in case we had a remote branch already
         try("git checkout -f $br || { git rm -r .; git checkout --orphan $br; git commit --allow-empty -m empty; }")
           or die "creating a new empty branch failed: " . text;
-        return;
+        return $br;
     }
 
     $br =~ s(^/)();
@@ -237,6 +253,7 @@ sub switch_to {
     say "    (others: " . join( ", ", @br ) . ")" if @br;
 
     co_f($br);
+    return $br;
 }
 
 sub default_and {
@@ -273,7 +290,7 @@ sub save {
     die "need dirs/files to 'save'" unless @_;
 
     # switch to the branch named (or create a new one)
-    switch_to( $br, 'create' );
+    $br = switch_to( $br, 'create' );
 
     # optional "commit message" (identified by "oh this is neither a file nor
     # a directory name in the original directory"!)
@@ -301,7 +318,7 @@ sub restore {
     my $br = shift;    # branch
 
     # switch to the branch name (or first match to pattern) passed
-    switch_to($br);
+    $br = switch_to($br);
 
     # if no dir/file patterns are passed, just use "." to grab all of them
     @_ = ('.') unless @_;
