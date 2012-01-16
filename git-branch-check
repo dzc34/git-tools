@@ -8,11 +8,11 @@ use warnings;
 use Getopt::Long;
 my ( $help, $cbo, $cro, $max_diff, $ff );
 GetOptions(
-    "help|h|?"    => \$help,        # this help text
-    "current|c"   => \$cbo,         # act upon current branch only
-    "remote|r"    => \$cro,         # compare with remote only; do not compare local-to-local branches
-    "max_diff|md" => \$max_diff,    # max diff (default 100; see below for details)
-    "ff"          => \$ff,          # don't just check, try to fast forward also
+    "help|h|?"      => \$help,        # this help text
+    "current|c"     => \$cbo,         # act upon current branch only
+    "remote|r"      => \$cro,         # compare with remote only; do not compare local-to-local branches
+    "max_diff|md=i" => \$max_diff,    # max diff (default 100; see below for details)
+    "ff"            => \$ff,          # don't just check, try to fast forward also
 ) or die "option error; maybe a typo or a missing '--' somewhere?\n";
 
 $max_diff ||= 100;
@@ -151,7 +151,7 @@ sub check {
         my ( $l, $r ) = compare( $b, $u );
 
         my $abs = $l + $r; next unless $abs;    # if they're equal, don't show it
-        next if $abs >= $max_diff;              # if they're too far apart, don't show it
+        next if $abs > $max_diff;               # if they're too far apart, don't show it
 
         print spacepad( 4, $l ) . $Cg . ( $l || ' ' );
         print spacepad( 4, $r ) . $Cr . ( $r || ' ' );
