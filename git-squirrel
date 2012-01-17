@@ -104,6 +104,7 @@ sub init {
     }
 
     $SIG{__DIE__} = sub {
+        say "co -f master in SIG DIE" if $ENV{D};
         co_f('master');
       }
 }
@@ -189,7 +190,7 @@ sub get_branches {
 
 sub co_f {
     my $br = shift;    # could be empty
-    say "switching to $br...";
+    say "switching to $br..." if $ENV{D};
     try("git checkout -f $br") or die "'git checkout -f $br' failed: " . text;
 }
 
@@ -344,8 +345,7 @@ sub restore {
     # switch to the branch name (or first match to pattern) passed
     $br = switch_to($br);
 
-    # if no dir/file patterns are passed, just use "." to grab all of them
-    @_ = ('.') unless @_;
+    die "need some file names/patterns also" unless @_;
 
     my $fpatt = join "|", map { m(^/(.*)) ? $1 : "^$_\$" } @_;
 
@@ -413,9 +413,15 @@ Notes:
   - separate squirrel arguments from arguments passed to gitk etc., using '--'
   - '-r' saves to /tmp, '-r=.' saves to current directory.  See doc for more.
 
-THIS LIST OF OPTIONS IS INCOMPLETE; please see git-squirrel.mkd for more (for
-example, how to restore files to elsewhere than /tmp).  There are also some
-really important notes and cautions there.
+Quick recap of arguments using regex syntax :-)
+
+    -v (bn|bp)+
+    -l (bn|bp) (fn|fp)+
+    -e (bn|bp) (fn|fp)+ (word)*
+    -s (bn|bp) [commit message] (file/dir)+
+    -r (bn|bp) [--cm=patt] [-r=path] (fn|fp)+
+
+Please see documentation for some really important notes and cautions there.
 ";
 
     exit 1;
