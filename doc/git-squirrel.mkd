@@ -40,72 +40,6 @@ I want to
 `git squirrel` is a tool to manage your own special "dump everything here" git
 repository.
 
-### usage by examples
-
-First, I have two git aliases (in `~/.gitconfig`) that look like this:
-
-    [alias]
-        z   =   squirrel --repo=/home/sitaram/imli/repos/squirrel
-        nb  =   squirrel --repo=/home/sitaram/imli/repos/notebook
-
-With these aliases, I never have to type out the actual 'squirrel' repository
-name, as you can see.  The commands below all save to that repo.
-
-  * save an arbitrary file or files
-
-        git z -s bills/2011 *-bill-payment-*.pdf
-
-    This saves the PDFs named to a branch called bills/2011
-
-  * save some files with a "commit message" (see tips section later for how
-    this may be useful)
-
-        git z -s reviews/2011 "first round of reviews" [...files...]
-
-  * regularly save some work-in-progress
-
-        git z -s reviews/2011 papers/*.pdf reviews/*.ods
-
-    You can do this everyday if you like, and only changes get recorded.
-
-  * list all branches, including remote branches which you have not yet
-    checked out local copies of
-
-        git z -l
-
-    same but list only branches containing 'foo' anywhere in the name
-
-        git z -l foo
-
-  * take a look at the entire repo using 'gitk'
-
-        git z -v
-
-    or just some branches
-
-        git z -v bills/2009 bills/2010
-
-    or all branches containing 'foo' anywhere in the name (see tips section
-    later for details on matching multiple branch names)
-
-        git z -v /foo
-
-    You can use 'tig' instead of 'gitk' by running with -v=tig instead of -v.
-
-    In both these cases, squirrel adds the --date-order option.
-
-  * restore a file or files quickly, using a branch name and one or more
-    filepath regexes
-
-        git z -r reviews/2011 access
-
-    This get you all files whose *path* (i.e., including directory part)
-    contains the word "access", from the branch called reviews/2011, to
-    `/tmp`.
-
-    See tips section later for other options (like how to save the files to
-    the current directory, etc)
-
 ## cautions
 
   * the repo should NOT be bare.  This *is* a work repo, except you're using
@@ -124,54 +58,118 @@ name, as you can see.  The commands below all save to that repo.
     significantly different from other git repos.  This is not git-annexe or
     bup :-)
 
-## tips
+## syntax
 
-  * the requirement for '--repo' (squirrel repo path) is cumbersome but the
-    fact is, most anyone should have at most one or two.  Use git aliases;
-    here are mine:
+**TIP**: The `--repo` option is, umm, not an option.  I have this in my
+`~/.gitconfig` so my commands are just `git z ...`:
 
-        z   =   squirrel --repo=/home/sitaram/imli/squirrel
-        nb  =   squirrel --repo=/home/sitaram/imli/notebook
+    [alias]
+        z   =   squirrel --repo=/home/sitaram/imli/repos/squirrel
 
-    and I just say 'git z [...]' for the 'squirrel' repo, and 'git nb [...]'
-    for the notebook repo.  You could also use shell aliases.
+That is what **all** the examples in this document will assume.
 
-  * (all commands) you can use a regex pattern to reduce typing the branch
-    names.  For example:
+Don't forget you're supposed to have *one* squirrel repo for your whole
+machine (otherwise you're back to square one searching for files!)
 
-        git z -s /bills [...files to save...]
+**TIP**: Sometimes you will need a '--' to separate options from arguments, as
+you can see in some of the examples below.
 
-    This will look at all branches that contain 'bills' anywhere, and pick the
-    last one (by sort order).  So if you have bills/2010, bills/2011, and
-    bills/2012, the 2012 one will be picked up.
+### note on branch and filenames
 
-  * (list) you can use multiple regex patterns for the branch names, and they
-    will all be OR-ed together.  But don't use complex regexes; the OR-ing is
-    very simplistic.
+  * If a branch name begins with a `/`, the rest of that word is taken to be a
+    pattern to be regex-matched against all know branch names.
 
-    Also, this one doesn't use "/" at the beginning to denote a pattern to
-    search for; they're all patterns anyway
+    Where only one match is required or reasonable, the **last** match, in
+    sorted order, is picked; it is not an error that more matches exist.
 
-  * (restore) you can use multiple regex patterns for the dir/file names;
-    they're also OR-ed in the same way and the same cautions apply.
+  * The same logic holds for filenames, except that *all* the matching
+    filenames are picked, not just one.
 
-  * (restore) you can specify where to put the restored files, by saying
-    `-r=.`, `-r=../foo`, etc., for paths relative to the current directory, or
-    `-r=/tmp/myfiles` for absolute paths.
+### view the current repo
 
-  * (restore) you can go to older commits by adding a commit subject/SHA
-    pattern:
+arguments: list of branch names or patterns
 
-        git z -r=. reviews/2011 -cs=first.round filepatt [...]
+    git z -v                            # gitk, all branches
+    git z -v tig                        # tig, all branches
+    git z -v -- /foo bar                # gitk, branches bar and any branch
+                                        # containing 'foo' in the name
 
-    The pattern, treated as a regex, is searched in the output of 'git log
-    --date-order --oneline' after checking out the given branch.
+Squirrel adds a `--date-order` to the viewer's arguments for convenience.
 
-  * (edit) you can use many 'git grep' options, but you need to put them after
-    a "--":
+### list branches and/or files
 
-        squirrel -e -- foo bar       # edit files containing foo *and* bar
-        squirrel -e -- foo --or bar  # edit files containing foo *or* bar
+arguments: one branch name or pattern, followed by optional list of file names
+or patterns
 
-    You'll also notice that git grep's default is --or, but we change it to
-    --and.  Be aware that internally, a '-l' and a '-i' are also prefixed.
+    git z -l /foo                       # list all branches containing 'foo' in the name
+    git z -l /foo /gl                   # list all files containing 'gl' in the name from
+                                        # within all branches containing 'foo' in the name
+    git z -l /foo /pdf /jpg             # list all jpgs and pdfs in all
+                                        # branches containing 'foo' in the
+                                        # name
+    git z -l 2011/misc mypic.jpg        # list a specific file in a specific branch
+
+### edit files directly and save back
+
+This works only for text files, and uses `$VISUAL`, then `$EDITOR`, falling
+back to `vim` if none of these are set.
+
+arguments: one branch name or pattern, followed by optional list of file
+patterns (actual filenames not allowed here), followed by an optional list of
+words to search *within* the files.  These words are processed as arguments to
+'git grep' except we choose a default of --and, not --or.
+
+The branch name will be created if it is not a pattern and does not already
+exist.
+
+This is an interesting command.  I suggest you don't use it until I figure out
+where I'm going with it, but if you have to, give it a whirl :-)
+
+### save files
+
+arguments: one branch name/pattern, optional "commit message", list of
+files/directories to save
+
+The branch name will be created if it is not a pattern and does not already
+exist.  The optional commit message must not have the same name as a file or a
+directory in the original directory.
+
+    git z -s bills/2012 *-payment.jpg   # save all the screenshot to bills/2012
+
+    git z -s /bills     *-payment.jpg   # same, assuming bills/2012 is the last
+                                        # of the matching branches in sort order
+
+    git z -s reviews/2011 "first round of reviews" [...files...]
+                                        # add a "commit message"; see tips
+                                        # section later for why this may useful
+
+    git z -s reviews/2011 papers/*.pdf reviews/*.ods
+                                        # run such a command regularly to save
+                                        # w-i-p; only changes will go through,
+                                        # just like normal git
+
+Note: just like normal git, don't use this with huge binaries etc.; use
+git-annex or something for those).
+
+### restore files
+
+arguments: one branchname/pattern, followed by an optional list of file names
+or patterns.
+
+NOTE: restores to /tmp by default
+
+    git z -r /reviews /access           # restore all files containing
+                                        # 'access' in their names from the
+                                        # last (in sorted order) branch whose
+                                        # name contains 'reviews'
+
+    git z -r /reviews                   # same, but restore all the files in
+                                        # the branch
+
+    git z -r=. /reviews                 # same, but restore to $PWD
+
+    git z -r --cm='first' /reviews      # see notes below
+
+The commit match (--cm) option does a regex search on the output of `git log
+--date-order --oneline` after checking out the given branch.  The first SHA
+found is used.
