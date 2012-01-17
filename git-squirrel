@@ -113,12 +113,13 @@ sub search_branches {
     local @_ = @_;
 
     # for each argument, if it starts with a "/", remove it and expand the
-    # list with matching branch names
+    # list with matching branch names.  If it doesn't, treat it as an exact
+    # branch name and add it to the list if such a branch exists.
     for my $br (@_) {
         if ( $br =~ s(^/)() ) {
             push( @br, grep( /$br/, @branches ) );
         } else {
-            push @br, $br;
+            push @br, $br if $br ~~ @branches;
         }
     }
 
