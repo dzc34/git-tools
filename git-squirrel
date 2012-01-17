@@ -220,11 +220,12 @@ sub edit {
     # find files with matching content.  We're using "run()" here because we
     # don't expect any serious errors and STDERR is not as important as the
     # convenience of the list form
-    run( "git", "grep", @grepargs, @files );
-
-    # if none were found, create a new one (and add it to the index)
-    @files = lines;
-    @files = new_file(@_) unless @files;
+    if (@grepargs) {
+        run( "git", "grep", @grepargs, @files );
+        # if none were found, create a new one (and add it to the index)
+        @files = lines;
+        @files = new_file(@_) unless @files;
+    }
     # and finally edit
     system( ( $ENV{VISUAL} || $ENV{EDITOR} || "vim" ), @files );
 
@@ -285,6 +286,8 @@ sub switch_to {
 }
 
 sub default_and {
+    return () unless @_;
+
     my @ret  = qw(-l -i);
     my $word = 0;
     for my $i (@_) {
