@@ -33,6 +33,11 @@
 
   * [squirrel away files and notes](git-squirrel.html) <!-- (git-squirrel) -->
       * [why](git-squirrel.html#doc_git_squirrel_why_)
-          * [usage by examples](git-squirrel.html#doc_git_squirrel_usage_by_examples_)
       * [cautions](git-squirrel.html#doc_git_squirrel_cautions_)
-      * [tips](git-squirrel.html#doc_git_squirrel_tips_)
+      * [syntax](git-squirrel.html#doc_git_squirrel_syntax_)
+          * [note on branch and filenames](git-squirrel.html#doc_git_squirrel_note_on_branch_and_filenames_)
+          * [view the current repo](git-squirrel.html#doc_git_squirrel_view_the_current_repo_)
+          * [list branches and/or files](git-squirrel.html#doc_git_squirrel_list_branches_and_or_files_)
+          * [edit files directly and save back](git-squirrel.html#doc_git_squirrel_edit_files_directly_and_save_back_)
+          * [save files](git-squirrel.html#doc_git_squirrel_save_files_)
+          * [restore files](git-squirrel.html#doc_git_squirrel_restore_files_)
