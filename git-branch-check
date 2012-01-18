@@ -175,7 +175,7 @@ sub compare {
 }
 
 sub dirty {
-    try "git status -s -uno | cut -c1-2 | sort | uniq -c";
+    try "git -c color.ui=always status -s | egrep -o '^.*?m ' | sort |uniq -c";
     return ( text =~ /./ );
 }
 
