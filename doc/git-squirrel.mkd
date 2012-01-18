@@ -77,7 +77,7 @@ you can see in some of the examples below.
 ### note on branch and filenames
 
   * If a branch name begins with a `/`, the rest of that word is taken to be a
-    pattern to be regex-matched against all know branch names.
+    pattern to be regex-matched against all known branch names.
 
     Where only one match is required or reasonable, the **last** match, in
     sorted order, is picked; it is not an error that more matches exist.

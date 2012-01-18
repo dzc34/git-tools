@@ -53,21 +53,21 @@ files, so we don't want to constrain that type of search unless asked to.
 
         git dig -pm foo -- --branches --remotes
 
-  * Show top 10 largest files whose pathnames contain 'bar' from local branches
-    'pu' and 'master' (note, no '--' separator required; however it is a good
-    habit to get into just in case).
+  * Show all files whose pathnames contain 'bar' from local branches 'pu' and
+    'master' (note, no '--' separator required; however it is a good habit to
+    get into just in case).
 
         git dig -pm bar pu master
 
 ### looking for wasted space
 
-  * Find the top 10 largest files after `git gc --prune=now`
+  * Find the top 10 largest files
 
         git dig --check_stash --check_reflog -- --all
         # you can abbreviate those flags; run with '-h' or see next example
 
-    This will catch every possible file in the repo (assuming you ran that
-    'git gc'), and show you the top 10.  To see the top 50,
+    This will catch every possible file in the repo (except unreachable
+    commits), and show you the top 10.  To see the top 50,
 
         git dig --cs --crl --top=50 -- --all
 

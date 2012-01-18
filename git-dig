@@ -15,9 +15,9 @@ GetOptions(
     "help|h|?"         => \$help,           # this help text
     "top=i"            => \$top,            # max files to show; default 10
     "min=i"            => \$min,            # minimum size in bytes; default 10240
-    "path_match|pm=s"  => \$path_match,     # (alias 'pm') regex to match pathnames
-    "check_stash|cs"   => \$check_stash,    # (alias 'cs') check stash also
-    "check_reflog|crl" => \$check_reflog    # (alias 'crl') check reflog also
+    "path_match|pm=s"  => \$path_match,     # regex to match pathnames
+    "check_stash|cs"   => \$check_stash,    # check stash also
+    "check_reflog|crl" => \$check_reflog    # check reflog also
 ) or die "option error; maybe a typo or a missing '--' somewhere?\n";
 
 # if looking for a specific path, the other constraints are removed if not
@@ -246,8 +246,8 @@ Usage: git dig [options] -- [refs]
     say "
 Note: when path_match (--pm) is specified, the default for --top changes to
 999999 and that for --min changes to 1.  The idea is that path_match is often
-used to look for files, so we don't want to constrain that type of search
-unless asked for.
+used to look for files, so we don't want to constrain that type of search in
+any *other* way unless asked for.
 ";
 
     exit 1;
