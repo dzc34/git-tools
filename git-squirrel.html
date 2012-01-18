@@ -1,4 +1,7 @@
 <head>
+<title>
+squirrel away files and notes
+</title>
 <style>
     body        { background: #fff; margin-left:  40px;   font-size:  0.9em;  font-family: sans-serif; max-width: 800px; }
     h1          { background: #ffb; margin-left: -30px;   border-top:    5px  solid #ccc; }
@@ -116,13 +119,16 @@ bup :-)</p></li>
 <p>Don't forget you're supposed to have <em>one</em> squirrel repo for your whole
 machine (otherwise you're back to square one searching for files!)</p>
 
+<p><strong>TIP</strong>: Sometimes you will need a '--' to separate options from arguments, as
+you can see in some of the examples below.</p>
+
 <p><a name="doc_git_squirrel_note_on_branch_and_filenames_"></a></p>
 
 <h3>note on branch and filenames</h3>
 
 <ul>
 <li><p>If a branch name begins with a <code>/</code>, the rest of that word is taken to be a
-pattern to be regex-matched against all know branch names.</p>
+pattern to be regex-matched against all known branch names.</p>
 
 <p>Where only one match is required or reasonable, the <strong>last</strong> match, in
 sorted order, is picked; it is not an error that more matches exist.</p></li>
@@ -138,7 +144,7 @@ filenames are picked, not just one.</p></li>
 
 <pre><code>git z -v                            # gitk, all branches
 git z -v tig                        # tig, all branches
-git z -v /foo bar                   # gitk, branches bar and any branch
+git z -v -- /foo bar                # gitk, branches bar and any branch
                                     # containing 'foo' in the name
 </code></pre>
 

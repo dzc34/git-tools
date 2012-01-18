@@ -1,0 +1,57 @@
+<head>
+<title>
+looking for wasted space
+</title>
+<style>
+    body        { background: #fff; margin-left:  40px;   font-size:  0.9em;  font-family: sans-serif; max-width: 800px; }
+    h1          { background: #ffb; margin-left: -30px;   border-top:    5px  solid #ccc; }
+    h2          { background: #ffb; margin-left: -20px;   border-top:    3px  solid #ddd; }
+    h3          { background: #ffb; margin-left: -10px; }
+    h4          { background: #ffb; }
+    code        { font-size:    1.1em;  background:  #ddf; }
+    pre         { margin-left:  2em;    background:  #ddf; }
+    pre code    { font-size:    1.1em;  background:  #ddf; }
+</style>
+
+</head>
+
+<p style="text-align:center">
+    <a href="master-toc.html">master TOC</a>
+|
+    <a href="master-toc.html#doc/git-dig">chapter TOC</a>
+|
+    <a href="support.html">support</a>
+</p>
+
+
+<h3>looking for wasted space</h3>
+
+<ul>
+<li><p>Find the top 10 largest files</p>
+
+<pre><code>git dig --check_stash --check_reflog -- --all
+# you can abbreviate those flags; run with '-h' or see next example
+</code></pre>
+
+<p>This will catch every possible file in the repo (except unreachable
+commits), and show you the top 10.  To see the top 50,</p>
+
+<pre><code>git dig --cs --crl --top=50 -- --all
+</code></pre></li>
+<li><p>Find the largest files that are only in the stash or a reflog</p>
+
+<pre><code>git dig --cs --crl -- --not --all
+</code></pre></li>
+<li><p>That last command, because of the '--not --all', would also miss some
+unusual refs, like the 'refs/original' that git-filter-branch ends up
+saving all your old commits to.  To see that and possibly any other such
+non-standard commits</p>
+
+<pre><code>git dig --cs --crl -- --not --branches --remotes --tags
+</code></pre>
+
+<p>As you can see, that's a little longer to type but you can see where this
+is going now.  This is the command to see everything that is not in a
+"normal" branch (local or remote) or tag.</p></li>
+</ul>
+

@@ -1,4 +1,7 @@
 <head>
+<title>
+dig for files in a git repo
+</title>
 <style>
     body        { background: #fff; margin-left:  40px;   font-size:  0.9em;  font-family: sans-serif; max-width: 800px; }
     h1          { background: #ffb; margin-left: -30px;   border-top:    5px  solid #ccc; }
@@ -98,9 +101,9 @@ remote branches (but not tags)</p>
 
 <pre><code>git dig -pm foo -- --branches --remotes
 </code></pre></li>
-<li><p>Show top 10 largest files whose pathnames contain 'bar' from local branches
-'pu' and 'master' (note, no '--' separator required; however it is a good
-habit to get into just in case).</p>
+<li><p>Show all files whose pathnames contain 'bar' from local branches 'pu' and
+'master' (note, no '--' separator required; however it is a good habit to
+get into just in case).</p>
 
 <pre><code>git dig -pm bar pu master
 </code></pre></li>
@@ -111,14 +114,14 @@ habit to get into just in case).</p>
 <h3>looking for wasted space</h3>
 
 <ul>
-<li><p>Find the top 10 largest files after <code>git gc --prune=now</code></p>
+<li><p>Find the top 10 largest files</p>
 
 <pre><code>git dig --check_stash --check_reflog -- --all
 # you can abbreviate those flags; run with '-h' or see next example
 </code></pre>
 
-<p>This will catch every possible file in the repo (assuming you ran that
-'git gc'), and show you the top 10.  To see the top 50,</p>
+<p>This will catch every possible file in the repo (except unreachable
+commits), and show you the top 10.  To see the top 50,</p>
 
 <pre><code>git dig --cs --crl --top=50 -- --all
 </code></pre></li>
