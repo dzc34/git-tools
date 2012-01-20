@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use File::Path qw(make_path);
+use Cwd qw(cwd);
 
 # ----------------------------------------------------------------------
 
@@ -27,12 +28,12 @@ GetOptions(
 $view    = 'gitk' if ( defined($view)    and not $view );
 $restore = '/tmp' if ( defined($restore) and not $restore );
 
-usage() if $help;                                              # exits;
+usage() if $help;                            # exits;
 
 # globals
 
-our @branches;                                                 # local branches
-our $od;                                                       # original directory
+our @branches;                               # local branches
+our $od;                                     # original directory
 
 # ----------------------------------------------------------------------
 
@@ -74,9 +75,9 @@ restore(@ARGV) if defined($restore);
 sub init {
 
     # $repo and $restore need some special handling, mainly making them absolute
-    $repo = "$ENV{PWD}/$repo" unless $repo =~ m(^/);
+    $repo = cwd() . "/$repo" unless $repo =~ m(^/);
     if ($restore) {
-        $restore = "$ENV{PWD}/$restore" unless $restore =~ m(^/);    # since PWD will change soon...
+        $restore = cwd() . "/$restore" unless $restore =~ m(^/);    # since PWD will change soon...
         die "$restore should be a directory" unless -d $restore;
     }
 
@@ -87,7 +88,7 @@ sub init {
     delete @ENV{ grep /^GIT_/, keys %ENV };
 
     # save the old PWD and move to the new repo
-    $od = $ENV{SQ_OD} = $ENV{PWD};
+    $od = $ENV{SQ_OD} = cwd();
     chdir($repo);
 
     try "git symbolic-ref HEAD" or die "DETACHED HEAD or no repo: " . text;
