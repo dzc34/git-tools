@@ -42,14 +42,15 @@ additional documentation available as given below).</li>
 <p>Briefly:</p>
 
 <ul>
-<li><p>git ls: List files with pathnames matching given regexes in current branch
-or, optionally, all local branches, remote branches, or tags.</p></li>
-<li><p>git dig: Dig through your repo for large files, files with pathnames
-matching a regex, etc.  If git-dig can't find a file, it's in an
-unreachable commit or had been gc-d.</p></li>
-<li><p>git branch-check: Checks what branches you have that your remotes don't
-have and vice-versa, and for the common ones, how many commits are
-different.</p></li>
+<li><p>git ls: List files (matching pathname regex, if supplied) in current,
+local, or remote branches, or tags, or a selection of them.</p></li>
+<li><p>git dig: dig for files in a repo by size or pathname match.  If git-dig
+can't find a file, it's in an unreachable commit or has been gc-d.</p></li>
+<li><p>git branch-check: checks how in-sync the repo is with all its remotes.</p></li>
+<li><p>git-housekeep: check all "registered" repos on your account for sync
+status, untracked files, etc., and take some actions if needed.</p></li>
+<li><p>git-squirrel: squirrel away files that you don't want to keep but are
+afraid to delete</p></li>
 </ul>
 
 <hr />
@@ -87,12 +88,17 @@ you have that the remotes don't, and vice versa.</p>
 ('git branch -v -v' will only show you for the 'upstream' but you might
 have other remotes you also push to).</p>
 
+<p>Finally, it'll show you how far your local branches are from each other
+(see inline help for more on this).</p>
+
 <p>This is meant to be interactive, using colors, green for stuff that is
 extra on the local side, red for the other side.  See the end of this
 document for sample output.</p>
 
 <p>In addition, it can also fast-forward all your local branches if their
 upstreams have moved ahead.</p></li>
+<li><p><code>git-housekeep</code>: register each working clone of yours with git-housekeep,
+then quickly check for untracked files and save them using git-squirrel.</p></li>
 <li><p><code>git-squirrel</code>: Helps you abuse git to "squirrel away" files you might
 never need but are afraid to delete, work-in-progress items that don't
 have their own repos, etc., simply and quickly.</p>
