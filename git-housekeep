@@ -1,0 +1,227 @@
+#!/usr/bin/perl
+use 5.10.0;
+use strict;
+use warnings;
+
+use File::Path qw(make_path);
+use Cwd qw(cwd realpath);
+
+# ----------------------------------------------------------------------
+
+use Getopt::Long;
+my ( $help, $register, $checkall, $fast );
+GetOptions(
+    "help|h|?"      => \$help,        # this help text
+    "register|r:s"  => \$register,    # register a new repo
+    "checkall|ca|a" => \$checkall,    # check all repos, not just the named ones
+    "fast|f"        => \$fast,        # don't ask questions
+) or die "option error; maybe a typo or a missing '--' somewhere?\n";
+
+usage() if $help;                     # exits;
+
+# globals
+my $RC      = "$ENV{HOME}/.git-housekeep.rc";
+my $section = "git-housekeep";
+
+# ----------------------------------------------------------------------
+
+# forward declarations for some subs; see end of file for code
+sub rc;
+sub text;
+sub lines;
+sub try;
+
+# ----------------------------------------------------------------------
+
+my $hn = get_hostname();
+
+sub get_hostname {
+    my $hn = gc( 'get', $RC, $section, 'hostname' );
+    unless ($hn) {
+        print STDERR 'please supply some short name to identify this host to you:';
+        chomp( $hn = <> );
+        die unless gc( 'add', $RC, $section, 'hostname', $hn );
+    }
+    return $hn;
+}
+
+if ( defined $register ) {
+
+    $register ||= '.';
+    my $repo = realpath($register);
+    die "$repo already registered\n" if gc( 'exists', $RC, $section, 'repo', $repo );
+
+    gc( 'add', $RC, $section, 'repo', $repo ) or die "registering $repo failed: $!";
+
+} elsif ( defined $checkall ) {
+
+    my @repos = gc( 'get', $RC, $section, 'repo' );
+
+    for my $repo (@repos) {
+        hk_one($repo);
+    }
+} else {
+    hk_one(cwd());
+}
+
+# DONE...
+
+# ----------------------------------------------------------------------
+# subroutines
+# ----------------------------------------------------------------------
+
+sub hk_one {
+    my $repo = shift;
+
+    chdir($repo) or die "chdir $repo failed: $!";
+    say "\n", cwd();
+    next if not $fast and ask("Ctrl-C to abort, 'y' to skip:");
+
+    ( my $basename = $repo ) =~ s/.*\///;
+    my $year      = (localtime)[5] + 1900;
+    my $sq_branch = "untracked-files/$year/$basename";
+
+    # set up the save and ignore lists
+    try("git z -l $sq_branch /. | cut -f2");
+    my @save = sort( lines() );
+    my @ignore = gc( 'get', '', $section, 'ignore' );
+
+    # check if we want to add any more of the ignored/untracked files
+    try("git status -s -uall --ignored | cut -c4-");
+    for my $file ( sort( lines() ) ) {
+        if ( $file ~~ @save )   { say STDERR "\t$file (saving)"   if not $fast; next }
+        if ( $file ~~ @ignore ) { say STDERR "\t$file (ignoring)" if not $fast; next }
+        if ($fast) {
+            say STDERR "\t$file (IGNORED)";
+        } else {
+            given ( ask("$file [y/N]:") ) {
+                when (/y/) {
+                    push @save, $file;
+                }
+                when (/n/) {
+                    push @ignore, $file;
+                }
+            }
+        }
+    }
+
+    if (@save) {
+        print STDERR "backing up " . scalar(@save) . " known untracked files:\n\t", join( "\n\t", @save ), "\n";
+        system( "git", "z", "-s", $sq_branch, "(host: $hn)", @save );
+        # say join(" ", ( "git", "z", "-s", $sq_branch, "'(host: $hn)'", @save ) );
+        # system( "bash -l");
+    }
+
+    for my $ig (@ignore) {
+        say STDERR "ignoring $ig..." if gc( 'add', '', $section, 'ignore', $ig );
+    }
+
+    system("git bc -r");
+    system("bash -l") if ( not $fast and ask("bash -l? [y/N]:") );
+    ask( "-" x 60 );
+}
+
+sub ask {
+    # expected return value: empty string, 'y', or 'n'
+    print STDERR shift();
+    my $yn = lc(<>);
+    $yn =~ s/[^yn]//g;
+    return $yn;
+}
+
+sub gc {
+    my ( $op, $in_file, $section, $key, $in_value ) = @_;
+    my $file  = ( $in_file  ? " --file $in_file" : "" );
+    my $value = ( $in_value ? "'^$in_value\$'"   : "" );
+
+    if ( $op eq 'exists' ) {
+
+        return try("git config $file --get-all $section.$key $value");
+
+    } elsif ( $op eq 'get' ) {
+
+        $op = ( wantarray ? '--get-all' : '--get' );
+        try("git config $file $op $section.$key") or return "";
+        return ( wantarray ? lines() : ( lines() )[0] );
+
+    } elsif ( $op eq 'add' ) {
+
+        return "" if gc( 'exists', $in_file, $section, $key, $in_value );
+        return try("git config $file --add $section.$key $in_value");
+
+    } elsif ( $op eq 'del' ) {
+
+        return try("git config $file --unset-all $section.$key $value");
+
+    }
+}
+
+# ----------------------------------------------------------------------
+
+sub usage {
+    # I don't like POD.  This is not up for discussion.
+
+    say "
+git-housekeep -- check all local repos for updates, sync status, untracked files, etc
+";
+
+    @ARGV = ($0);
+    while (<>) {
+        next unless /^\s*GetOptions/ .. /^\s*\)/;
+        next if /^\s*GetOptions/ or /^\s*\)/;
+
+        my $op = '';
+        if (/"(.*?)"/) {
+            $op = "  " . join( ", ", map { s/[=:][sif]$//; /../ ? "--$_" : "-$_" } split /\|/, $1 );
+            print $op;
+        }
+        print( " " x ( 30 - length($op) ) );
+
+        s/.*#/#/;
+        print;
+    }
+
+    say "
+Notes:
+  - does only current repo if run without '-a'
+  - '-f' is recommended for most repos (with not too many untracked files)
+";
+
+    exit 1;
+}
+
+# ----------------------------------------------------------------------
+
+# bare-minimum subset of 'Tsh' (see github.com/sitaramc/tsh)
+{
+    my ( $rc, $text );
+    sub rc   { return $rc   || 0; }
+    sub text { return $text || ''; }
+    sub lines { return split /\n/, $text; }
+
+    sub try {
+        my $cmd = shift; die "try: expects only one argument" if @_;
+        $text = `( $cmd ) 2>&1; echo -n RC=\$?`;
+        if ( $text =~ s/RC=(\d+)$// ) {
+            $rc = $1;
+            return ( not $rc );
+        }
+        die "couldnt find RC= in result; this should not happen:\n$text\n\n...\n";
+    }
+
+    sub run {
+        open( my $fh, "-|", @_ ) or die "tell sitaram $!";
+        local $/ = undef; $text = <$fh>;
+        close $fh; warn "tell sitaram $!" if $!;
+        $rc = ( $? >> 8 );
+        return $text;
+    }
+}
+
+sub dbg {
+    use Data::Dumper;
+    for my $i (@_) {
+        print STDERR "DBG: " . Dumper($i);
+    }
+}
+
