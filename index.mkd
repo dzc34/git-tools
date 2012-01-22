@@ -10,16 +10,19 @@ These programs...
 
 Briefly:
 
-  * git ls: List files with pathnames matching given regexes in current branch
-    or, optionally, all local branches, remote branches, or tags.
+  * git ls: List files (matching pathname regex, if supplied) in current,
+    local, or remote branches, or tags, or a selection of them.
 
-  * git dig: Dig through your repo for large files, files with pathnames
-    matching a regex, etc.  If git-dig can't find a file, it's in an
-    unreachable commit or had been gc-d.
+  * git dig: dig for files in a repo by size or pathname match.  If git-dig
+    can't find a file, it's in an unreachable commit or has been gc-d.
 
-  * git branch-check: Checks what branches you have that your remotes don't
-    have and vice-versa, and for the common ones, how many commits are
-    different.
+  * git branch-check: checks how in-sync the repo is with all its remotes.
+
+  * git-housekeep: check all "registered" repos on your account for sync
+    status, untracked files, etc., and take some actions if needed.
+
+  * git-squirrel: squirrel away files that you don't want to keep but are
+    afraid to delete
 
 ----
 
@@ -57,12 +60,18 @@ Briefly:
     ('git branch -v -v' will only show you for the 'upstream' but you might
     have other remotes you also push to).
 
+    Finally, it'll show you how far your local branches are from each other
+    (see inline help for more on this).
+
     This is meant to be interactive, using colors, green for stuff that is
     extra on the local side, red for the other side.  See the end of this
     document for sample output.
 
     In addition, it can also fast-forward all your local branches if their
     upstreams have moved ahead.
+
+  * `git-housekeep`: register each working clone of yours with git-housekeep,
+    then quickly check for untracked files and save them using git-squirrel.
 
   * `git-squirrel`: Helps you abuse git to "squirrel away" files you might
     never need but are afraid to delete, work-in-progress items that don't
