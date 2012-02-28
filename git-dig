@@ -73,8 +73,9 @@ my ( $blob, $name );
 my %name;
 my %size;
 while (<$objects>) {
+    chomp;
     next unless / ./;    # no commits or top level trees
-    ( $blob, $name ) = split;    # TODO test with filenames containing spaces also
+    ( $blob, $name ) = split( ' ', $_, 2 );    # TODO test with filenames containing spaces also
     next unless $name =~ /$path_match/;
     $name{$blob} = $name;
     say $blobfile $blob;
@@ -114,14 +115,16 @@ for my $name (@names_by_size) {
     # IOW, doing it this way lets 'git dig -cs -- --not --all' shows you
     # *only* those files that are in the stash (or reflog if you used -crl)
 
+    my @args1 = qw(--no-pager log -1 --diff-filter=MARC);
+    my @args2 = qw(--not --branches --remotes --tags);
     for my $r (@refs) {
-        system("git --no-pager log -1 --format='%x09%h%x09%x09%ar%x09$r' $r -- $name");
+        system("git", @args1, "--format=%x09%h%x09%x09%ar%x09$r", $r, "--", $name);
     }
     for my $r (@stash_shas) {
-        system("git --no-pager log -1 --format='%x09%h%x09%x09%ar%x09$r' $r --not --branches --remotes --tags -- $name");
+        system("git", @args1, "--format=%x09%h%x09%x09%ar%x09$r", $r, @args2, "--", $name);
     }
     for my $r (@reflog_shas) {
-        system( "git --no-pager log -1 --format='%x09%h%x09%x09%ar%x09$r' $r --not --branches --remotes --tags " . join( " ", @stash_shas ) . " -- $name" );
+        system("git", @args1, "--format=%x09%h%x09%x09%ar%x09$r", $r, @args2, @stash_shas, "--", $name);
     }
     print "\n";
 
