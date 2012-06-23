@@ -10,6 +10,9 @@ These programs...
 
 Briefly:
 
+  * tar-checkout-f: approximates what 'git checkout -f' does in terms of
+    deleting unwanted files, but works on a tar file on STDIN.
+
   * git ls: List files (matching pathname regex, if supplied) in current,
     local, or remote branches, or tags, or a selection of them.
 
@@ -25,6 +28,26 @@ Briefly:
     afraid to delete
 
 ----
+
+In detail:
+
+  * `tar-checkout-f`: approximates what 'git checkout -f' does in terms of
+    deleting unwanted files, but works on a tar file on STDIN.  Another way
+    to think of it is that it is kinda like 'rsync --delete'.
+
+    Why is it here?  Because although git is not a deployment tool, too many
+    people want to use it as such, and tie themselves in knots trying.
+
+        git archive HEAD | tar-checkout-f --yes-I-know /path/to/deploy/dir
+
+    is much safer/saner.  The "--yes-I-know" is to make sure you can't blame
+    me if you accidentally pass in `$HOME` or something as the path :-)
+
+    If you don't supply the --yes-I-know, it will only print what would be
+    deleted.  (If the tar file names don't match the actual file names, you
+    could end up deleting a lot more than you thought it should!)
+
+    Dependencies: the feature bloated GNU tools bash, fgrep, and xargs
 
   * `git-ls`: Given a list of regex patterns, git-ls matches these to
     pathnames (not just the basename of the file) and finds all matching files

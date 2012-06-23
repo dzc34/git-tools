@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# WARNINGS:
+#       THE DIRECTORY SPECIFIED MIGHT GET WIPED OUT!!!
+
+# USAGE:
+#       git archive HEAD | tar-checkout-f --yes-I-know /path/to/deploydir
+
+die() { echo "$@" >&2; exit 1; }
+# check arg-1 for CYA
+dryrun=1
+[ "$1" = "--yes-I-know" ] && { dryrun=0; shift; }
+# check arg-1 is a valid directory
+[ -d $1 ] || die "urkk (makes strangled noise)..."
+
+td=$(mktemp -d)
+# echo td=$td >&2
+trap "/bin/rm -rf $td" 0
+
+tee >(tar tf - | sed -e 's,^\./,,' > $td/tf) | tar -C "$1" -xf -
+
+# ok now the fun stuff; delete stuff that should not be there
+cd "$1"
+cmd="echo would delete:"
+[ "$dryrun" = "0" ] && cmd="rm -v"
+find . -type f | sed -e 's,^\./,,' | fgrep -v -x -f $td/tf | xargs -r -d '\n' $cmd
