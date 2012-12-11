@@ -24,9 +24,6 @@ Briefly:
   * git-housekeep: check all "registered" repos on your account for sync
     status, untracked files, etc., and take some actions if needed.
 
-  * git-squirrel: squirrel away files that you don't want to keep but are
-    afraid to delete
-
 ----
 
 In detail:
@@ -94,15 +91,7 @@ In detail:
     upstreams have moved ahead.
 
   * `git-housekeep`: register each working clone of yours with git-housekeep,
-    then quickly check for untracked files and save them using git-squirrel.
-
-  * `git-squirrel`: Helps you abuse git to "squirrel away" files you might
-    never need but are afraid to delete, work-in-progress items that don't
-    have their own repos, etc., simply and quickly.
-
-    Full documentation
-    [here](http://sitaramc.github.com/git-tools/git-squirrel.html) or in the
-    file doc/git-squirrel.mkd.
+    then quickly check for untracked files
 
 ## sample output
 
